@@ -10,6 +10,7 @@ package-lock.json
 *.tgz
 coverage/
 .claude/
+CLAUDE.md
 
 # Python (embed-server)
 .venv/

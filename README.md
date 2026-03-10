@@ -1,10 +1,22 @@
-# GeminiClaw
+<div align="center">
+  <img src="docs/images/geminiclaw_logo.png" alt="GeminiClaw" width="600">
 
-[![CI](https://github.com/geminiclaw/geminiclaw/actions/workflows/ci.yml/badge.svg)](https://github.com/geminiclaw/geminiclaw/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Node.js](https://img.shields.io/badge/node-%3E%3D20-brightgreen)](https://nodejs.org/)
+  [![CI](https://github.com/geminiclaw/geminiclaw/actions/workflows/ci.yml/badge.svg)](https://github.com/geminiclaw/geminiclaw/actions/workflows/ci.yml)
+  [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+  [![Node.js](https://img.shields.io/badge/node-%3E%3D20-brightgreen)](https://nodejs.org/)
 
-Autonomous agent orchestrator powered by [Gemini CLI](https://github.com/google-gemini/gemini-cli). GeminiClaw wraps Gemini CLI as the core agent engine, adding scheduling ([Inngest](https://www.inngest.com/)), persistent memory with hybrid search ([QMD](https://github.com/tobil/qmd)), MCP tools, and multi-channel messaging ([Vercel Chat SDK](https://github.com/nicepkg/chat) — Discord / Slack).
+  An extension for [Gemini CLI](https://github.com/google-gemini/gemini-cli) that adds autonomous agent orchestration.<br>
+  Scheduling · Memory · MCP Tools · Multi-channel Messaging
+</div>
+
+### Why GeminiClaw?
+
+GeminiClaw extends Gemini CLI — it doesn't replace it. All LLM reasoning, tool use, and sandbox execution happen inside Gemini CLI via [ACP](https://github.com/google-gemini/gemini-cli/blob/main/docs/acp.md). GeminiClaw adds the layers around it.
+
+- **ACP process pool** — Keeps warm Gemini CLI processes with session affinity. Stateful multi-turn conversations without replay overhead.
+- **Thin orchestration layer** — Scheduling is Inngest. Search is QMD. Messaging is Chat SDK. GeminiClaw is the glue, not another agent framework.
+- **Sandboxed by default** — Every agent run executes inside Gemini CLI's Docker sandbox. Tool use is isolated from day one.
+- **Bring your own auth** — Authentication is handled entirely by Gemini CLI. GeminiClaw supports whatever auth method you configure (Google OAuth, API key, Vertex AI).
 
 ## Quick Start
 
@@ -117,6 +129,10 @@ Shares agent-generated files (HTML reports, images) via URL. With [Tailscale](ht
 </details>
 
 ## Architecture
+
+<div align="center">
+  <img src="docs/images/geminiclaw_architecture.png" alt="GeminiClaw Architecture" width="800">
+</div>
 
 GeminiClaw wraps Gemini CLI with thin orchestration layers. See [docs/architecture.md](docs/architecture.md) for details.
 
