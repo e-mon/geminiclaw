@@ -128,7 +128,9 @@ export const agentRun = inngest.createFunction(
                 if (progressReporter) {
                     let finalText: string | undefined;
                     const responseText = runResult?.responseText ?? '';
-                    if (responseText && !runResult?.error) {
+                    // Skip preview finalization for heartbeat OK — the progress message
+                    // should be deleted, not edited into "HEARTBEAT_OK".
+                    if (responseText && !runResult?.error && !runResult?.heartbeatOk) {
                         const filtered = filterResponseText(responseText);
                         const { mediaSrcs, cleanedText } = parseMediaMarkers(filtered);
                         if (cleanedText && mediaSrcs.length === 0) {
