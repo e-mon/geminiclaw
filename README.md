@@ -1,7 +1,7 @@
 <div align="center">
   <img src="docs/images/geminiclaw_logo.png" alt="GeminiClaw" width="600">
 
-  [![CI](https://github.com/geminiclaw/geminiclaw/actions/workflows/ci.yml/badge.svg)](https://github.com/geminiclaw/geminiclaw/actions/workflows/ci.yml)
+  [![CI](https://github.com/e-mon/geminiclaw/actions/workflows/ci.yml/badge.svg)](https://github.com/e-mon/geminiclaw/actions/workflows/ci.yml)
   [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
   [![Node.js](https://img.shields.io/badge/node-%3E%3D20-brightgreen)](https://nodejs.org/)
 
