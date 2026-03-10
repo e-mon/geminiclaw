@@ -11,7 +11,7 @@
 
 ### Why GeminiClaw?
 
-GeminiClaw extends Gemini CLI — it doesn't replace it. All LLM reasoning, tool use, and sandbox execution happen inside Gemini CLI via [ACP](https://github.com/google-gemini/gemini-cli/blob/main/docs/acp.md). GeminiClaw adds the layers around it.
+GeminiClaw extends Gemini CLI — it doesn't replace it. All LLM reasoning, tool use, and sandbox execution happen inside Gemini CLI via [ACP](https://github.com/google-gemini/gemini-cli/blob/main/docs/acp.md). GeminiClaw never touches OAuth tokens or calls backend services directly — it spawns Gemini CLI processes and communicates over stdio.
 
 - **ACP process pool** — Keeps warm Gemini CLI processes with session affinity. Stateful multi-turn conversations without replay overhead.
 - **Thin orchestration layer** — Scheduling is Inngest. Search is QMD. Messaging is Chat SDK. GeminiClaw is the glue, not another agent framework.
@@ -147,6 +147,17 @@ GeminiClaw wraps Gemini CLI with thin orchestration layers. See [docs/architectu
 - [Security](docs/security.md) — Docker sandbox, agent-blind secrets, tool effect gate
 - [Memory](docs/memory.md) — write/read timing, reliability spectrum
 - [Vault](docs/vault.md) — encrypted secret storage, backend selection
+
+### Obsidian Integration
+
+The `memory/` directory uses YAML frontmatter and Markdown — it works as an Obsidian vault out of the box. To browse memory from a local machine while GeminiClaw runs remotely:
+
+1. Install [Tailscale](https://tailscale.com/) on both machines
+2. Install [Syncthing](https://syncthing.net/) on both machines
+3. Share the remote `{workspace}/memory/` folder via Syncthing (devices discover each other over tailnet)
+4. Open the synced folder as a vault in Obsidian
+
+Add `.obsidian` to `memory/.stignore` to prevent Obsidian config from syncing back.
 
 ## CLI Commands
 
