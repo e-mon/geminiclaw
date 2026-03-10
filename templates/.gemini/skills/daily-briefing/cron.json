@@ -1,0 +1,7 @@
+{
+  "name": "Daily Briefing",
+  "schedule": { "type": "cron", "expression": "0 8 * * *" },
+  "prompt": "Run the daily-briefing skill. Output the briefing.",
+  "enabled": true,
+  "model": "flash"
+}

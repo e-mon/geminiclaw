@@ -1,0 +1,72 @@
+version: '3'
+
+tasks:
+  check-tools:
+    desc: Verify required external tools are installed
+    silent: true
+    cmds:
+      - |
+        ok=true
+        for cmd in node bun docker overmind tmux; do
+          if command -v "$cmd" >/dev/null 2>&1; then
+            echo "  ✔ $cmd"
+          else
+            echo "  ✘ $cmd — not found"; ok=false
+          fi
+        done
+        if ! docker info >/dev/null 2>&1; then
+          echo "  ✘ Docker daemon not running"; ok=false
+        fi
+        $ok || { echo ""; echo "Install missing tools before running 'task setup'."; exit 1; }
+
+  setup:
+    desc: First-time setup (install deps, build, link, run setup wizard)
+    cmds:
+      - task: check-tools
+      - bun install --force
+      - npx --yes inngest-cli@latest --version
+      - task: install
+      - geminiclaw setup
+
+  install:
+    desc: Build and install geminiclaw globally (bun link)
+    sources:
+      - src/**/*.ts
+      - templates/**/*
+      - package.json
+      - tsconfig.json
+    generates:
+      - dist/**/*.js
+    cmds:
+      - bun run build
+      - bun link
+      - echo "✓ geminiclaw installed — $(which geminiclaw)"
+
+  start:
+    desc: "Start all services (inngest + serve). Use -d for daemon: task start -- -d"
+    cmds:
+      - task: install
+      - rm -f .overmind.sock
+      - find /tmp/tmux-$(id -u)/ -name "overmind-geminiclaw-*" -type s -delete 2>/dev/null || true
+      - |
+        if echo "{{.CLI_ARGS}}" | grep -q -- '-d'; then
+          overmind start -D
+          echo "✓ started (daemon) — use 'task logs' or 'task status'"
+          echo "  stop: task stop"
+        else
+          echo "✓ starting (foreground) — Ctrl-C to stop"
+          echo "  daemon mode: task start -- -d"
+          overmind start
+        fi
+
+  stop:
+    desc: Stop all services (gracefully quit overmind daemon)
+    cmd: overmind quit
+
+  status:
+    desc: Show service status
+    cmd: overmind status
+
+  logs:
+    desc: Tail all service logs (Ctrl-C to quit)
+    cmd: overmind echo

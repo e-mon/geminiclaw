@@ -1,0 +1,83 @@
+{
+  "name": "geminiclaw",
+  "version": "0.2.0",
+  "description": "Autonomous agent orchestrator powered by Gemini CLI",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/geminiclaw/geminiclaw.git"
+  },
+  "homepage": "https://github.com/geminiclaw/geminiclaw#readme",
+  "bugs": {
+    "url": "https://github.com/geminiclaw/geminiclaw/issues"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "geminiclaw": "dist/index.js"
+  },
+  "scripts": {
+    "build": "bun scripts/embed-templates.ts && tsc",
+    "build:binary": "bun scripts/embed-templates.ts --bun && bun build --compile --minify --sourcemap ./src/index.ts --outfile dist/geminiclaw && bun scripts/embed-templates.ts",
+    "dev": "bun src/index.ts",
+    "test": "bun vitest run",
+    "test:watch": "bun vitest",
+    "lint": "biome lint src/",
+    "format": "biome format --write src/",
+    "check": "biome check src/",
+    "typecheck": "tsc --noEmit",
+    "prepare": "git config core.hooksPath .githooks"
+  },
+  "dependencies": {
+    "@chat-adapter/discord": "^4.18.0",
+    "@chat-adapter/slack": "^4.14.0",
+    "@chat-adapter/state-memory": "^4.14.0",
+    "@clack/prompts": "^1.0.1",
+    "@google/gemini-cli": "0.34.0-nightly.20260307.6c3a90645",
+    "@mariozechner/pi-tui": "^0.54.2",
+    "@modelcontextprotocol/sdk": "^1",
+    "@tobilu/qmd": "^1.0.7",
+    "chalk": "^5",
+    "chat": "^4.14.0",
+    "commander": "^12",
+    "croner": "^10.0.1",
+    "express": "^5",
+    "inngest": "^3",
+    "open": "^11.0.0",
+    "simple-git": "^3",
+    "zod": "^3"
+  },
+  "optionalDependencies": {
+    "@napi-rs/keyring": "^1"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.4",
+    "better-sqlite3": "^11",
+    "@types/better-sqlite3": "^7",
+    "@types/bun": "^1.3.10",
+    "@types/express": "^5.0.2",
+    "@types/jsdom": "^28.0.0",
+    "@types/node": "^22",
+    "jsdom": "^28.1.0",
+    "playwright": "^1.58.2",
+    "typescript": "^5",
+    "vitest": "^3"
+  },
+  "keywords": [
+    "gemini",
+    "autonomous-agent",
+    "cli",
+    "mcp"
+  ],
+  "files": [
+    "dist/",
+    "templates/"
+  ],
+  "patchedDependencies": {
+    "@tobilu/qmd@1.0.7": "patches/@tobilu%2Fqmd@1.0.7.patch",
+    "@google/gemini-cli@0.34.0-nightly.20260307.6c3a90645": "patches/@google%2Fgemini-cli@0.34.0-nightly.20260307.6c3a90645.patch"
+  }
+}

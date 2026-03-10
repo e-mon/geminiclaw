@@ -1,0 +1,38 @@
+diff --git a/dist/llm.js b/dist/llm.js
+index 6e9fa7dc6c7590ac28184196b88d391365aca433..7297b7ba616862c5536f585198cd1cf81abdf3ce 100644
+--- a/dist/llm.js
++++ b/dist/llm.js
+@@ -461,7 +461,7 @@ export class LlamaCpp {
+     // Qwen3 reranker template adds ~200 tokens overhead (system prompt, tags, etc.)
+     // Chunks are max 800 tokens, so 800 + 200 + query ≈ 1100 tokens typical.
+     // Use 2048 for safety margin. Still 17× less than auto (40960).
+-    static RERANK_CONTEXT_SIZE = 2048;
++    static RERANK_CONTEXT_SIZE = 4096;
+     async ensureRerankContexts() {
+         if (this.rerankContexts.length === 0) {
+             const model = await this.ensureRerankModel();
+diff --git a/dist/mcp.d.ts b/dist/mcp.d.ts
+index fd430fa49ba2785151289337c2c02d830a7f1b68..67519ba8fc86386be0ca1bbe5a7e018bcf13d9f4 100644
+--- a/dist/mcp.d.ts
++++ b/dist/mcp.d.ts
+@@ -6,6 +6,7 @@
+  *
+  * Follows MCP spec 2025-06-18 for proper response types.
+  */
++export declare function createMcpServer(store: unknown): import("@modelcontextprotocol/sdk/server/mcp.js").McpServer;
+ export declare function startMcpServer(): Promise<void>;
+ export type HttpServerHandle = {
+     httpServer: import("http").Server;
+diff --git a/dist/mcp.js b/dist/mcp.js
+index 7484edf93601d273b4b504679518274a777b37f7..efe7081d2ddcd72b5c22c7ce8573a877dc9dc44b 100644
+--- a/dist/mcp.js
++++ b/dist/mcp.js
+@@ -100,7 +100,7 @@ function buildInstructions(store) {
+  * Create an MCP server with all QMD tools, resources, and prompts registered.
+  * Shared by both stdio and HTTP transports.
+  */
+-function createMcpServer(store) {
++export function createMcpServer(store) {
+     const server = new McpServer({ name: "qmd", version: "0.9.9" }, { instructions: buildInstructions(store) });
+     // ---------------------------------------------------------------------------
+     // Resource: qmd://{path} - read-only access to documents by path

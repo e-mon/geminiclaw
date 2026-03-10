@@ -1,0 +1,7 @@
+{
+  "name": "Topic Patrol",
+  "schedule": { "type": "every", "intervalMin": 360 },
+  "prompt": "Run the topic-patrol skill.",
+  "enabled": true,
+  "model": "flash"
+}

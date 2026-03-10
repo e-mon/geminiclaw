@@ -1,0 +1,15 @@
+diff --git a/node_modules/@google/gemini-cli-core/dist/src/agents/local-executor.js b/node_modules/@google/gemini-cli-core/dist/src/agents/local-executor.js
+index ff1fbef..321ace7 100644
+--- a/node_modules/@google/gemini-cli-core/dist/src/agents/local-executor.js
++++ b/node_modules/@google/gemini-cli-core/dist/src/agents/local-executor.js
+@@ -76,10 +76,6 @@ export class LocalAgentExecutor {
+             // registry and register it with the agent's isolated registry.
+             const tool = parentToolRegistry.getTool(toolName);
+             if (tool) {
+-                if (tool instanceof DiscoveredMCPTool &&
+-                    !toolName.includes(MCP_QUALIFIED_NAME_SEPARATOR)) {
+-                    throw new Error(`MCP tool '${toolName}' must be requested with its server prefix (e.g., '${tool.serverName}${MCP_QUALIFIED_NAME_SEPARATOR}${toolName}') in agent '${definition.name}'.`);
+-                }
+                 agentToolRegistry.registerTool(tool);
+             }
+         };

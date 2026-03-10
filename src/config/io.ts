@@ -1,0 +1,172 @@
+/**
+ * config/io.ts — Config file loading and saving.
+ */
+
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { vault } from '../vault/index.js';
+import { CONFIG_PATH, getWorkspacePath } from './paths.js';
+import { type Config, ConfigSchema, WORKSPACE_CONFIG_FILENAME, WorkspaceConfigSchema } from './schema.js';
+
+/**
+ * Load config from disk, or return defaults.
+ *
+ * Merge order (later overrides earlier):
+ *   1. Defaults (from Zod schema)
+ *   2. ~/.geminiclaw/config.json  — user config (secrets live here as $vault: refs or plaintext)
+ *   3. {workspace}/config.json    — agent-writable behavioral overrides
+ *   4. Vault secrets              — resolved from vault if value starts with "$vault:"
+ *   5. Environment variables      — for secrets not in file or vault
+ *
+ * Environment variable fallbacks:
+ *   DISCORD_TOKEN or DISCORD_API_KEY → channels.discord.token
+ *   SLACK_BOT_TOKEN                  → channels.slack.token
+ *   SLACK_SIGNING_SECRET             → channels.slack.signingSecret
+ *
+ * Vault usage: call `await vault.init()` before `loadConfig()` to enable resolution.
+ * If vault is not initialized, $vault: references are left as-is (undefined after parse).
+ */
+export function loadConfig(configPath: string = CONFIG_PATH): Config {
+    let json: unknown = {};
+    if (existsSync(configPath)) {
+        try {
+            json = JSON.parse(readFileSync(configPath, 'utf-8'));
+        } catch (err) {
+            process.stderr.write(`[geminiclaw] warning: failed to parse ${configPath}: ${String(err)}\n`);
+        }
+    }
+
+    // Track which keys the user explicitly set in their config file.
+    // Workspace overrides should not clobber user-explicit values.
+    const userExplicitKeys = new Set(typeof json === 'object' && json !== null ? Object.keys(json) : []);
+
+    const config = ConfigSchema.parse(json);
+
+    // Apply workspace config overrides — agent can self-modify these fields.
+    // Only override fields that the user did NOT explicitly set in their config.
+    const workspacePath = getWorkspacePath(config);
+    const wsConfigPath = join(workspacePath, WORKSPACE_CONFIG_FILENAME);
+    if (existsSync(wsConfigPath)) {
+        try {
+            const wsJson = JSON.parse(readFileSync(wsConfigPath, 'utf-8'));
+            const ws = WorkspaceConfigSchema.parse(wsJson);
+            if (ws.autonomyLevel !== undefined && !userExplicitKeys.has('autonomyLevel'))
+                config.autonomyLevel = ws.autonomyLevel;
+            if (ws.heartbeatIntervalMin !== undefined && !userExplicitKeys.has('heartbeatIntervalMin'))
+                config.heartbeatIntervalMin = ws.heartbeatIntervalMin;
+            if (ws.maxToolIterations !== undefined && !userExplicitKeys.has('maxToolIterations'))
+                config.maxToolIterations = ws.maxToolIterations;
+            if (ws.sessionIdleMinutes !== undefined && !userExplicitKeys.has('sessionIdleMinutes'))
+                config.sessionIdleMinutes = ws.sessionIdleMinutes;
+            if (ws.discord?.respondInChannels !== undefined) {
+                config.channels.discord.respondInChannels = ws.discord.respondInChannels;
+            }
+            if (ws.slack?.respondInChannels !== undefined) {
+                config.channels.slack.respondInChannels = ws.slack.respondInChannels;
+            }
+        } catch (err) {
+            process.stderr.write(
+                `[geminiclaw] warning: failed to parse workspace config ${wsConfigPath}: ${String(err)}\n`,
+            );
+        }
+    }
+
+    // Merge homeChannel into respondInChannels (deduplicated)
+    if (config.channels.discord.homeChannel) {
+        const home = config.channels.discord.homeChannel;
+        if (!config.channels.discord.respondInChannels.includes(home)) {
+            config.channels.discord.respondInChannels = [home, ...config.channels.discord.respondInChannels];
+        }
+    }
+    if (config.channels.slack.homeChannel) {
+        const home = config.channels.slack.homeChannel;
+        if (!config.channels.slack.respondInChannels.includes(home)) {
+            config.channels.slack.respondInChannels = [home, ...config.channels.slack.respondInChannels];
+        }
+    }
+
+    // Resolve $vault: references — requires vault.init() to have been called first.
+    // If the vault is not initialized, resolveSync() is a no-op and returns the raw value.
+    config.channels.discord.token = vault.resolveSync(config.channels.discord.token);
+    config.channels.slack.token = vault.resolveSync(config.channels.slack.token);
+    config.channels.slack.signingSecret = vault.resolveSync(config.channels.slack.signingSecret);
+
+    // Resolve $vault: references in sandboxEnv
+    for (const key of Object.keys(config.sandboxEnv)) {
+        const resolved = vault.resolveSync(config.sandboxEnv[key]);
+        if (resolved !== undefined) {
+            config.sandboxEnv[key] = resolved;
+        } else {
+            // Vault key not found — remove to avoid leaking the $vault: ref into the container
+            delete config.sandboxEnv[key];
+        }
+    }
+    // GEMINICLAW_MODEL env var overrides config.model (useful for Procfile/overmind)
+    const envModel = process.env.GEMINICLAW_MODEL;
+    if (envModel) {
+        config.model = envModel;
+    }
+
+    // Apply env var fallbacks — env takes precedence only when token is absent from file and vault
+    const discordToken = process.env.DISCORD_TOKEN ?? process.env.DISCORD_API_KEY;
+    if (discordToken && !config.channels.discord.token) {
+        config.channels.discord.token = discordToken;
+    }
+
+    const slackToken = process.env.SLACK_BOT_TOKEN;
+    if (slackToken && !config.channels.slack.token) {
+        config.channels.slack.token = slackToken;
+    }
+
+    const slackSecret = process.env.SLACK_SIGNING_SECRET;
+    if (slackSecret && !config.channels.slack.signingSecret) {
+        config.channels.slack.signingSecret = slackSecret;
+    }
+
+    return config;
+}
+
+/**
+ * Recursively merge source into target, preserving existing nested keys.
+ */
+function deepMerge(target: Record<string, unknown>, source: Record<string, unknown>): void {
+    for (const key of Object.keys(source)) {
+        const sv = source[key];
+        const tv = target[key];
+        if (isPlainObject(sv) && isPlainObject(tv)) {
+            deepMerge(tv as Record<string, unknown>, sv as Record<string, unknown>);
+        } else {
+            target[key] = sv;
+        }
+    }
+}
+
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+    return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
+/**
+ * Patch specific fields in config.json without loading the full Config object.
+ *
+ * This avoids the saveConfig(loadConfig()) anti-pattern where vault-resolved
+ * secrets get written back to disk in plaintext. Only the raw JSON is read
+ * and the specified fields are merged in.
+ */
+export function patchConfigFile(patch: Record<string, unknown>, configPath: string = CONFIG_PATH): void {
+    const dir = join(configPath, '..');
+    if (!existsSync(dir)) {
+        mkdirSync(dir, { recursive: true, mode: 0o700 });
+    }
+
+    let raw: Record<string, unknown> = {};
+    if (existsSync(configPath)) {
+        try {
+            raw = JSON.parse(readFileSync(configPath, 'utf-8')) as Record<string, unknown>;
+        } catch {
+            raw = {};
+        }
+    }
+
+    deepMerge(raw, patch);
+    writeFileSync(configPath, `${JSON.stringify(raw, null, 2)}\n`, { encoding: 'utf-8', mode: 0o600 });
+}

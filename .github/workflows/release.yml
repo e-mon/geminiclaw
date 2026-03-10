@@ -1,0 +1,89 @@
+name: Release
+
+on:
+  push:
+    branches: [develop]
+  pull_request:
+    branches: [main]
+    types: [closed]
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Version bump type"
+        required: true
+        type: choice
+        options:
+          - minor
+          - patch
+          - major
+
+jobs:
+  # ── develop push → dev prerelease tag ───────────────────────────
+  dev-tag:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tag dev build
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          DEV_TAG="v${VERSION}-dev.${SHORT_SHA}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "$DEV_TAG"
+          git push origin "$DEV_TAG"
+          echo "Tagged: $DEV_TAG"
+
+  # ── PR merge to main / manual dispatch → semver release ─────────
+  # PR title prefix → bump type:
+  #   major:/breaking:/breaking!  → major
+  #   patch:/fix:/hotfix:         → patch
+  #   Everything else             → minor (default)
+  release:
+    if: >-
+      (github.event_name == 'pull_request' && github.event.pull_request.merged == true)
+      || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Determine bump type
+        id: bump
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "type=${{ inputs.bump }}" >> "$GITHUB_OUTPUT"
+          else
+            LOWER=$(echo "$PR_TITLE" | tr '[:upper:]' '[:lower:]')
+            if echo "$LOWER" | grep -qE '^(major|breaking)(\(|:|!| )'; then
+              echo "type=major" >> "$GITHUB_OUTPUT"
+            elif echo "$LOWER" | grep -qE '^(patch|fix|hotfix)(\(|:|!)'; then
+              echo "type=patch" >> "$GITHUB_OUTPUT"
+            else
+              echo "type=minor" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+
+      - name: Bump version and tag
+        run: |
+          npx --yes npm version "${{ steps.bump.outputs.type }}" --no-git-tag-version
+          VERSION=$(node -p "require('./package.json').version")
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add package.json bun.lockb
+          git commit -m "chore(release): v${VERSION} [skip ci]"
+          git tag "v${VERSION}"
+          git push origin main --tags
+          echo "Released: v${VERSION}"

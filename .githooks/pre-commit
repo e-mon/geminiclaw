@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# Pre-commit hook: lint + format + typecheck + test
+set -euo pipefail
+
+echo "🔍 Running pre-commit checks..."
+
+# 0. Sanitize bun patch files staged for commit
+#    bun patch --commit emits .bun-tag entries and absolute cache paths in
+#    deleted-file diff headers. Strip them so patches stay portable.
+staged_patches=$(git diff --cached --name-only -- 'patches/*.patch')
+if [ -n "$staged_patches" ]; then
+    echo "  sanitizing patch files..."
+    for f in $staged_patches; do
+        if [ -f "$f" ]; then
+            # Remove .bun-tag entries (empty-file diffs for bun cache markers)
+            # Remove deleted-file entries whose b/ path is an absolute cache path
+            awk '
+                /^diff --git .* b\/\.bun-tag-/ { skip=1; next }
+                /^diff --git / && / b\/(Users\/|home\/|[A-Z]:)/ { skip=1; next }
+                /^diff --git / && !/ b\/(Users\/|home\/|\.bun-tag-|[A-Z]:)/ { skip=0 }
+                skip { next }
+                { print }
+            ' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+            git add "$f"
+        fi
+    done
+fi
+
+# 1. Biome check (lint + format) on entire src/
+echo "  biome check src/..."
+bun run check
+
+# 2. TypeScript type check
+echo "  tsc --noEmit..."
+bun run typecheck
+
+# 3. Run tests (use `bun run test` to invoke vitest, not Bun's native runner)
+echo "  vitest run..."
+bun run test
+
+echo "✅ All pre-commit checks passed."

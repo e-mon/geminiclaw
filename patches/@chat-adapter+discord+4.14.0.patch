@@ -1,0 +1,22 @@
+diff --git a/node_modules/@chat-adapter/discord/dist/index.js b/node_modules/@chat-adapter/discord/dist/index.js
+index e9ed311..78c1b69 100644
+--- a/node_modules/@chat-adapter/discord/dist/index.js
++++ b/node_modules/@chat-adapter/discord/dist/index.js
+@@ -933,13 +933,14 @@ var DiscordAdapter = class {
+    * Delete a Discord message.
+    */
+   async deleteMessage(threadId, messageId) {
+-    const { channelId } = this.decodeThreadId(threadId);
++    const { channelId, threadId: discordThreadId } = this.decodeThreadId(threadId);
++    const targetChannelId = discordThreadId || channelId;
+     this.logger.debug("Discord API: DELETE message", {
+-      channelId,
++      channelId: targetChannelId,
+       messageId
+     });
+     await this.discordFetch(
+-      `/channels/${channelId}/messages/${messageId}`,
++      `/channels/${targetChannelId}/messages/${messageId}`,
+       "DELETE"
+     );
+     this.logger.debug("Discord API: DELETE message response", { ok: true });

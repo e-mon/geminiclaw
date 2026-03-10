@@ -1,0 +1,8 @@
+{
+  "tasks": { "lastRun": null, "lastStatus": null },
+  "gmail": { "lastRun": null, "lastStatus": null },
+  "calendar": { "lastRun": null, "lastStatus": null },
+  "memory-cleanup": { "lastRun": null, "lastStatus": null },
+  "daily-summary": { "lastRun": null, "lastStatus": null },
+  "system-status": { "lastRun": null, "lastStatus": null }
+}
