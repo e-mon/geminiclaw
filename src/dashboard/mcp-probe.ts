@@ -47,7 +47,7 @@ function createTransport(cfg: McpServerConfig): Transport | undefined {
             args: cfg.args,
             env: cfg.env ? ({ ...process.env, ...cfg.env } as Record<string, string>) : undefined,
             cwd: cfg.cwd,
-            stderr: 'ignore',
+            stderr: 'pipe',
         });
     }
     return undefined;
@@ -64,6 +64,17 @@ async function probeOne(name: string, cfg: McpServerConfig): Promise<McpServerPr
         const result: McpServerProbe = { name, healthy: true, tools: [] };
         cache.set(name, { result, ts: Date.now() });
         return result;
+    }
+
+    // Collect stderr from stdio transports for diagnostics
+    let stderrBuf = '';
+    if (transport instanceof StdioClientTransport) {
+        (transport as unknown as { stderr: import('node:stream').Readable | null }).stderr?.on(
+            'data',
+            (chunk: Buffer) => {
+                stderrBuf += chunk.toString();
+            },
+        );
     }
 
     try {
@@ -86,14 +97,19 @@ async function probeOne(name: string, cfg: McpServerConfig): Promise<McpServerPr
         await client.close().catch(() => {});
         return probe;
     } catch (err) {
+        const errorMsg = String(err).substring(0, 200);
         const probe: McpServerProbe = {
             name,
             healthy: false,
             tools: [],
-            error: String(err).substring(0, 200),
+            error: errorMsg,
         };
         cache.set(name, { result: probe, ts: Date.now() });
-        log.warn('mcp probe failed', { server: name, error: probe.error });
+        log.warn('mcp probe failed', {
+            server: name,
+            error: errorMsg,
+            stderr: stderrBuf.trim().substring(0, 500) || undefined,
+        });
         return probe;
     }
 }

@@ -215,6 +215,22 @@ export function registerStartCommand(program: Command): void {
                 ? await probeAllServers(mcpSettings.mcpServers).catch(() => [])
                 : [];
 
+            // Builtin MCP servers (except gog) must be healthy — abort if any failed.
+            const REQUIRED_BUILTIN_SERVERS = new Set([
+                'geminiclaw-status',
+                'geminiclaw-ask-user',
+                'geminiclaw-cron',
+                'geminiclaw-admin',
+                'qmd',
+            ]);
+            const failedBuiltins = mcpProbes.filter((p) => REQUIRED_BUILTIN_SERVERS.has(p.name) && !p.healthy);
+            if (failedBuiltins.length > 0) {
+                const details = failedBuiltins.map((p) => `  - ${p.name}: ${p.error ?? 'unknown error'}`).join('\n');
+                throw new Error(
+                    `Required MCP servers failed health check:\n${details}\n\nFix the MCP server configuration and restart.`,
+                );
+            }
+
             // ── All initialization complete — print startup banner ──
             printBanner(port, { discordConnected, slackConnected, previewUrl, mcpProbes });
         });
@@ -403,6 +419,22 @@ function printBanner(port: number, opts: BannerOptions): void {
     const r = '\x1b[0m'; // reset
     const y = '\x1b[33m'; // yellow
 
+    // Blue→Purple→Pink gradient using 24-bit ANSI colors
+    const gradient = (line: string): string => {
+        const chars = [...line];
+        const len = chars.length;
+        return chars
+            .map((ch, i) => {
+                if (ch === ' ') return ch;
+                const t = len > 1 ? i / (len - 1) : 0;
+                const R = Math.round(100 + 155 * t);
+                const G = Math.round(130 - 50 * t);
+                const B = Math.round(235 - 80 * t);
+                return `\x1b[1;38;2;${R};${G};${B}m${ch}`;
+            })
+            .join('');
+    };
+
     const dot = (on: boolean): string => (on ? `${g}●${r}` : `${d}○${r}`);
 
     // Format MCP server status lines
@@ -417,13 +449,18 @@ function printBanner(port: number, opts: BannerOptions): void {
         mcpSection = `\n${d}  ──────────────────────────────────────────────────────────────────────────────${r}\n${lines.join('\n')}\n`;
     }
 
+    const logo = [
+        '   ██████╗ ███████╗███╗   ███╗██╗███╗   ██╗██╗ ██████╗██╗      █████╗ ██╗    ██╗',
+        '  ██╔════╝ ██╔════╝████╗ ████║██║████╗  ██║██║██╔════╝██║     ██╔══██╗██║    ██║',
+        '  ██║  ███╗█████╗  ██╔████╔██║██║██╔██╗ ██║██║██║     ██║     ███████║██║ █╗ ██║',
+        '  ██║   ██║██╔══╝  ██║╚██╔╝██║██║██║╚██╗██║██║██║     ██║     ██╔══██║██║███╗██║',
+        '  ╚██████╔╝███████╗██║ ╚═╝ ██║██║██║ ╚████║██║╚██████╗███████╗██║  ██║╚███╔███╔╝',
+        '   ╚═════╝ ╚══════╝╚═╝     ╚═╝╚═╝╚═╝  ╚═══╝╚═╝ ╚═════╝╚══════╝╚═╝  ╚═╝ ╚══╝╚══╝',
+    ];
+    const gradientLogo = logo.map((line) => gradient(line)).join(`${r}\n`);
+
     process.stdout.write(`
-${c}${b}   ██████╗ ███████╗███╗   ███╗██╗███╗   ██╗██╗ ██████╗██╗      █████╗ ██╗    ██╗
-  ██╔════╝ ██╔════╝████╗ ████║██║████╗  ██║██║██╔════╝██║     ██╔══██╗██║    ██║
-  ██║  ███╗█████╗  ██╔████╔██║██║██╔██╗ ██║██║██║     ██║     ███████║██║ █╗ ██║
-  ██║   ██║██╔══╝  ██║╚██╔╝██║██║██║╚██╗██║██║██║     ██║     ██╔══██║██║███╗██║
-  ╚██████╔╝███████╗██║ ╚═╝ ██║██║██║ ╚████║██║╚██████╗███████╗██║  ██║╚███╔███╔╝
-   ╚═════╝ ╚══════╝╚═╝     ╚═╝╚═╝╚═╝  ╚═══╝╚═╝ ╚═════╝╚══════╝╚═╝  ╚═╝ ╚══╝╚══╝${r}
+${gradientLogo}${r}
 
 ${d}  ──────────────────────────────────────────────────────────────────────────────${r}
 ${b}   Server${r}      ${c}http://localhost:${port}${r}

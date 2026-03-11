@@ -20,6 +20,15 @@ import { getEmbeddedTemplates } from './embedded-templates.js';
 // Files the user is expected to customize — never overwrite without explicit opt-in.
 const PROTECTED = new Set(['MEMORY.md', 'USER.md', 'SOUL.md', 'HEARTBEAT.md']);
 
+export type SyncStatus = 'created' | 'updated' | 'skipped' | 'protected' | 'merged' | 'conflict';
+
+export interface SyncResult {
+    path: string;
+    status: SyncStatus;
+    /** Unified diff of the change (empty for skipped/protected). */
+    diff?: string;
+}
+
 // ── Workspace ────────────────────────────────────────────────────
 
 export class Workspace {
@@ -71,12 +80,20 @@ export class Workspace {
 
     /**
      * Compare workspace files against templates and report sync status.
+     *
+     * With `diff: true`, includes unified diffs for outdated/missing files.
      */
     static syncStatus(
         workspacePath: string,
-    ): Array<{ path: string; status: 'up-to-date' | 'outdated' | 'protected' | 'missing' }> {
+        options?: { diff?: boolean },
+    ): Array<{ path: string; status: 'up-to-date' | 'outdated' | 'protected' | 'missing'; diff?: string }> {
+        const includeDiff = options?.diff ?? false;
         const templates = getEmbeddedTemplates();
-        const results: Array<{ path: string; status: 'up-to-date' | 'outdated' | 'protected' | 'missing' }> = [];
+        const results: Array<{
+            path: string;
+            status: 'up-to-date' | 'outdated' | 'protected' | 'missing';
+            diff?: string;
+        }> = [];
 
         for (const [relPath, content] of Object.entries(templates)) {
             const dest = join(workspacePath, relPath);
@@ -87,11 +104,20 @@ export class Workspace {
                 continue;
             }
             if (!existsSync(dest)) {
-                results.push({ path: relPath, status: 'missing' });
+                results.push({
+                    path: relPath,
+                    status: 'missing',
+                    ...(includeDiff && { diff: Workspace.unifiedDiff('', content, relPath) }),
+                });
                 continue;
             }
-            const same = readFileSync(dest, 'utf-8') === content;
-            results.push({ path: relPath, status: same ? 'up-to-date' : 'outdated' });
+            const current = readFileSync(dest, 'utf-8');
+            const same = current === content;
+            results.push({
+                path: relPath,
+                status: same ? 'up-to-date' : 'outdated',
+                ...(includeDiff && !same && { diff: Workspace.unifiedDiff(current, content, relPath) }),
+            });
         }
 
         return results;
@@ -109,15 +135,12 @@ export class Workspace {
         force?: boolean;
         /** @deprecated Use `force` instead. */
         includeProtected?: boolean;
-    }): Array<{ path: string; status: 'created' | 'updated' | 'skipped' | 'protected' | 'merged' | 'conflict' }> {
+    }): SyncResult[] {
         const { workspacePath, dryRun = false, force = false, includeProtected = false } = options;
         const useForce = force || includeProtected;
         const templates = getEmbeddedTemplates();
         const baseDir = join(workspacePath, '.gemini', '.template-base');
-        const results: Array<{
-            path: string;
-            status: 'created' | 'updated' | 'skipped' | 'protected' | 'merged' | 'conflict';
-        }> = [];
+        const results: SyncResult[] = [];
 
         for (const [relPath, content] of Object.entries(templates)) {
             const dest = join(workspacePath, relPath);
@@ -134,37 +157,38 @@ export class Workspace {
                 const existed = existsSync(dest);
 
                 if (!existed) {
-                    // File doesn't exist yet — just create it
                     if (!dryRun) {
                         mkdirSync(dirname(dest), { recursive: true });
                         writeFileSync(dest, content, 'utf-8');
                         Workspace.saveTemplateBase(baseDir, filename, content);
                     }
-                    results.push({ path: relPath, status: 'created' });
+                    results.push({
+                        path: relPath,
+                        status: 'created',
+                        diff: Workspace.unifiedDiff('', content, relPath),
+                    });
                     continue;
                 }
 
                 const current = readFileSync(dest, 'utf-8');
                 if (current === content) {
-                    // Already up to date
                     if (!dryRun) Workspace.saveTemplateBase(baseDir, filename, content);
                     results.push({ path: relPath, status: 'skipped' });
                     continue;
                 }
 
                 if (!existsSync(basePath)) {
-                    // No base — can't 3-way merge. Check if workspace matches old template.
-                    // If user hasn't modified it, safe to overwrite.
-                    // Otherwise, save current as base for next time and skip.
                     if (!dryRun) Workspace.saveTemplateBase(baseDir, filename, content);
-                    // Attempt merge with current content as base (treats all workspace content as user edits)
                     const mergeResult = Workspace.threeWayMerge(current, current, content);
-                    if (mergeResult.conflict) {
-                        results.push({ path: relPath, status: 'conflict' });
-                    } else {
-                        if (!dryRun) writeFileSync(dest, mergeResult.content, 'utf-8');
-                        results.push({ path: relPath, status: 'merged' });
+                    const status: SyncStatus = mergeResult.conflict ? 'conflict' : 'merged';
+                    if (!mergeResult.conflict && !dryRun) {
+                        writeFileSync(dest, mergeResult.content, 'utf-8');
                     }
+                    results.push({
+                        path: relPath,
+                        status,
+                        diff: Workspace.unifiedDiff(current, mergeResult.content, relPath),
+                    });
                     continue;
                 }
 
@@ -176,19 +200,28 @@ export class Workspace {
                     Workspace.saveTemplateBase(baseDir, filename, content);
                 }
 
-                results.push({ path: relPath, status: mergeResult.conflict ? 'conflict' : 'merged' });
+                results.push({
+                    path: relPath,
+                    status: mergeResult.conflict ? 'conflict' : 'merged',
+                    diff: Workspace.unifiedDiff(current, mergeResult.content, relPath),
+                });
                 continue;
             }
 
             const existed = existsSync(dest);
-            const changed = !existed || readFileSync(dest, 'utf-8') !== content;
+            const oldContent = existed ? readFileSync(dest, 'utf-8') : '';
+            const changed = !existed || oldContent !== content;
 
             if (changed) {
                 if (!dryRun) {
                     mkdirSync(dirname(dest), { recursive: true });
                     writeFileSync(dest, content, 'utf-8');
                 }
-                results.push({ path: relPath, status: existed ? 'updated' : 'created' });
+                results.push({
+                    path: relPath,
+                    status: existed ? 'updated' : 'created',
+                    diff: Workspace.unifiedDiff(oldContent, content, relPath),
+                });
             } else {
                 results.push({ path: relPath, status: 'skipped' });
             }
@@ -311,5 +344,57 @@ export class Workspace {
 
     get skillsDir(): string {
         return join(this.root, '.gemini', 'skills');
+    }
+
+    /**
+     * Generate a unified diff between two strings using `git diff --no-index`.
+     * Returns empty string if contents are identical or diff generation fails.
+     */
+    static unifiedDiff(oldContent: string, newContent: string, label: string): string {
+        if (oldContent === newContent) return '';
+
+        const tmp = join(tmpdir(), `geminiclaw-diff-${Date.now()}`);
+        mkdirSync(tmp, { recursive: true });
+
+        const oldPath = join(tmp, 'old');
+        const newPath = join(tmp, 'new');
+        writeFileSync(oldPath, oldContent, 'utf-8');
+        writeFileSync(newPath, newContent, 'utf-8');
+
+        try {
+            // git diff --no-index exits 1 when files differ — that's expected
+            const output = execFileSync(
+                'git',
+                [
+                    'diff',
+                    '--no-index',
+                    '--color=always',
+                    '-u',
+                    `--dst-prefix=b/${label}/`,
+                    `--src-prefix=a/${label}/`,
+                    oldPath,
+                    newPath,
+                ],
+                { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] },
+            );
+            return output;
+        } catch (err: unknown) {
+            // Exit code 1 = files differ (normal), output is in stdout
+            if (
+                err &&
+                typeof err === 'object' &&
+                'stdout' in err &&
+                typeof (err as { stdout: unknown }).stdout === 'string'
+            ) {
+                return (err as { stdout: string }).stdout;
+            }
+            return '';
+        } finally {
+            try {
+                rmSync(tmp, { recursive: true, force: true });
+            } catch {
+                /* ignore */
+            }
+        }
     }
 }

@@ -14,13 +14,14 @@ export function registerSyncTemplatesCommand(program: Command): void {
         .option('--status', 'Show sync status without applying changes')
         .option('--dry-run', 'Preview changes without applying them')
         .option('--force', '3-way merge protected files (preserves user edits, applies template changes)')
+        .option('--diff', 'Show unified diffs for changed files')
         .action(async (options) => {
             const config = loadConfig();
             const workspacePath = getWorkspacePath(config);
 
             // --status: show diff between templates and workspace, then exit
             if (options.status) {
-                const results = Workspace.syncStatus(workspacePath);
+                const results = Workspace.syncStatus(workspacePath, { diff: !!options.diff });
                 const outdated = results.filter((r) => r.status === 'outdated');
                 const missing = results.filter((r) => r.status === 'missing');
                 const upToDate = results.filter((r) => r.status === 'up-to-date');
@@ -35,6 +36,9 @@ export function registerSyncTemplatesCommand(program: Command): void {
                                 ? '! '
                                 : '  ';
                     process.stdout.write(`${icon}${r.path}  (${r.status})\n`);
+                    if (r.diff) {
+                        process.stdout.write(`${r.diff}\n`);
+                    }
                 }
 
                 process.stdout.write(
@@ -67,6 +71,9 @@ export function registerSyncTemplatesCommand(program: Command): void {
                                 ? '! '
                                 : '  ';
                 process.stdout.write(`${icon}${prefix}${r.path}  (${r.status})\n`);
+                if (r.diff && options.diff) {
+                    process.stdout.write(`${r.diff}\n`);
+                }
             }
 
             const created = results.filter((r) => r.status === 'created').length;

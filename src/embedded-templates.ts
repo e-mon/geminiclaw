@@ -48,7 +48,6 @@ const TEMPLATE_PATHS: Record<string, string> = {
     ".gemini/skills/translate-preview/references/twitter-render.js": resolve(__dirname, "../templates/.gemini/skills/translate-preview/references/twitter-render.js"),
     ".gemini/skills/workspace/SKILL.md": resolve(__dirname, "../templates/.gemini/skills/workspace/SKILL.md"),
     "AGENTS.md": resolve(__dirname, "../templates/AGENTS.md"),
-    "BOOTSTRAP.md": resolve(__dirname, "../templates/BOOTSTRAP.md"),
     "HEARTBEAT.md": resolve(__dirname, "../templates/HEARTBEAT.md"),
     "MEMORY.md": resolve(__dirname, "../templates/MEMORY.md"),
     "SOUL.md": resolve(__dirname, "../templates/SOUL.md"),

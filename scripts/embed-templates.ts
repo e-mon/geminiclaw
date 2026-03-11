@@ -27,8 +27,12 @@ function walkDir(dir: string): string[] {
   return entries.sort();
 }
 
+// BOOTSTRAP.md is handled separately in Workspace.create() (first-init only).
+// Exclude it from embedded templates to prevent re-creation on every init.
+const EXCLUDED = new Set(['BOOTSTRAP.md']);
+
 const files = walkDir(TEMPLATES_DIR);
-const relPaths = files.map((f) => relative(TEMPLATES_DIR, f));
+const relPaths = files.map((f) => relative(TEMPLATES_DIR, f)).filter((rel) => !EXCLUDED.has(rel));
 
 if (BUNDLE_MODE) {
   // Inline all template contents as string literals for single-binary builds
