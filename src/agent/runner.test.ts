@@ -200,17 +200,6 @@ describe('RunResultBuilder', () => {
         expect(result.heartbeatOk).toBe(false);
     });
 
-    it('detects HEARTBEAT_OK wrapped in <reply> tags', () => {
-        const builder = new RunResultBuilder('heartbeat');
-        builder.handleEvent({
-            ...messageEvent,
-            content: 'Checked everything.\n<reply>HEARTBEAT_OK</reply>',
-        });
-        const result = builder.build();
-
-        expect(result.heartbeatOk).toBe(true);
-    });
-
     it('heartbeatOk ignores HEARTBEAT_OK inside <think> tags', () => {
         const builder = new RunResultBuilder('heartbeat');
         builder.handleEvent({
@@ -441,18 +430,9 @@ describe('filterResponseText', () => {
         expect(filterResponseText('<think>only thoughts</think>')).toBe('');
     });
 
-    it('extracts <reply> content and discards surrounding narration', () => {
+    it('does not strip <reply> tags (deprecated, no longer extracted)', () => {
         const input =
             "I'll now check the calendar.\nReading digest...\n<reply>☀️ 天気は晴れ、予定なし</reply>\nUpdating state...";
-        expect(filterResponseText(input)).toBe('☀️ 天気は晴れ、予定なし');
-    });
-
-    it('passes through text unchanged when no <reply> tag is present', () => {
-        expect(filterResponseText('Normal response without reply tags')).toBe('Normal response without reply tags');
-    });
-
-    it('extracts <reply> that contains HEARTBEAT_OK', () => {
-        const input = 'Checked everything.\n<reply>HEARTBEAT_OK</reply>';
-        expect(filterResponseText(input)).toBe('HEARTBEAT_OK');
+        expect(filterResponseText(input)).toContain('<reply>');
     });
 });

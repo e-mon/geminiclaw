@@ -24,6 +24,11 @@ import type { AgentRunEventData } from '../inngest/agent-run.js';
 import { inngest } from '../inngest/client.js';
 import { createLogger } from '../logger.js';
 import { buildChannelContext } from './channel-context.js';
+import {
+    extractDiscordMessageChannelId,
+    fetchReferencedContext,
+    formatReferencedContext,
+} from './referenced-context.js';
 
 const log = createLogger('chat-handlers');
 
@@ -94,21 +99,6 @@ function extractRawChannelId(thread: Thread): string {
 }
 
 /**
- * Extract the Discord channel ID where messages actually live.
- *
- * In threads, messages are under the thread's own channel ID (parts[3]),
- * not the parent channel (parts[2]). Discord REST API requires the
- * correct channel ID to edit/delete messages.
- *
- *   "discord:guildId:channelId"            → parts[2] (non-thread)
- *   "discord:guildId:channelId:threadId"   → parts[3] (thread)
- */
-function extractDiscordMessageChannelId(threadId: string): string {
-    const parts = threadId.split(':');
-    return parts[3] ?? parts[2] ?? '';
-}
-
-/**
  * Derive the common session ID prefix for a channel (without thread-specific suffix).
  *
  * Used to construct full session IDs for thread summary lookups:
@@ -158,14 +148,16 @@ async function downloadAttachments(
     for (const att of attachments.slice(0, MAX_ATTACHMENT_COUNT)) {
         const name = (att.name as string) || `attachment-${Date.now()}`;
         const fetchData = att.fetchData as (() => Promise<Buffer>) | undefined;
+        const url = att.url as string | undefined;
 
-        if (!fetchData) {
-            log.info('skipping attachment without fetchData', { name });
+        if (!fetchData && !url) {
+            log.info('skipping attachment without fetchData or url', { name });
             continue;
         }
 
         try {
-            const data = await fetchData();
+            // biome-ignore lint: url is guaranteed non-null by the guard above
+            const data = fetchData ? await fetchData() : await fetchFromUrl(url as string);
             if (data.length > MAX_ATTACHMENT_BYTES) {
                 log.warn('attachment too large, skipping', { name, size: data.length });
                 continue;
@@ -182,6 +174,15 @@ async function downloadAttachments(
         }
     }
     return files;
+}
+
+/** Fetch attachment data from a URL when fetchData is not provided by the adapter. */
+async function fetchFromUrl(url: string): Promise<Buffer> {
+    const resp = await fetch(url);
+    if (!resp.ok) {
+        throw new Error(`HTTP ${resp.status} fetching attachment: ${url}`);
+    }
+    return Buffer.from(await resp.arrayBuffer());
 }
 
 /**
@@ -230,45 +231,6 @@ async function fetchChannelTopic(thread: Thread): Promise<string | undefined> {
  * Returns:
  *     Event data ready for Inngest dispatch.
  */
-/**
- * Fetch the starter message of a Discord thread.
- *
- * When a thread is created from a message, the thread ID equals the parent
- * message ID. Fetching `/channels/{parentChannelId}/messages/{threadId}`
- * returns the original message that the thread was created from.
- *
- * Returns the message content, or undefined on error / if the thread
- * was not created from a message.
- */
-async function fetchDiscordThreadStarterMessage(
-    thread: Thread,
-): Promise<{ author: string; content: string } | undefined> {
-    const parts = thread.id.split(':');
-    const parentChannelId = parts[2]; // discord:guildId:channelId:threadId
-    const threadId = parts[3];
-    if (!parentChannelId || !threadId) return undefined;
-
-    const botToken = (thread.adapter as unknown as { botToken: string }).botToken;
-    if (!botToken) return undefined;
-
-    try {
-        const resp = await fetch(`https://discord.com/api/v10/channels/${parentChannelId}/messages/${threadId}`, {
-            headers: { Authorization: `Bot ${botToken}` },
-        });
-        if (!resp.ok) return undefined;
-        const data = (await resp.json()) as {
-            content?: string;
-            author?: { username?: string; global_name?: string };
-        };
-        if (!data.content) return undefined;
-        const author = data.author?.global_name || data.author?.username || 'Unknown';
-        return { author, content: data.content };
-    } catch (err) {
-        log.warn('failed to fetch thread starter message', { error: String(err) });
-        return undefined;
-    }
-}
-
 async function buildEventData(thread: Thread, message: Message): Promise<AgentRunEventData> {
     const adapterName = thread.adapter.name;
     const config = loadConfig();
@@ -307,19 +269,18 @@ async function buildEventData(thread: Thread, message: Message): Promise<AgentRu
         }
     }
 
-    // For Discord threads: fetch the starter message to provide context on the
-    // first turn only. Without this, threads created on bot messages start with
-    // zero context. On subsequent turns the session history already contains it.
-    let threadStarterContext = '';
-    if (adapterName === 'discord' && thread.id.split(':').length === 4) {
+    // Fetch referenced context (reply target / thread starter) on the first turn only.
+    // Covers Discord Reply, Discord Thread Starter, and Slack Thread Starter.
+    // Guard: only run for adapters that actually have referenced context support.
+    let referencedContextBlock = '';
+    if (adapterName === 'discord' || adapterName === 'slack') {
         const { SessionStore } = await import('../agent/session/store.js');
-        const sessionsDir = join(workspacePath, 'memory', 'sessions');
-        const store = new SessionStore(sessionsDir);
+        const store = new SessionStore(join(workspacePath, 'memory', 'sessions'));
         const hasHistory = store.getLastEntry(sessionId) != null;
         if (!hasHistory) {
-            const starter = await fetchDiscordThreadStarterMessage(thread);
-            if (starter) {
-                threadStarterContext = `[Thread started from message by ${starter.author}: ${starter.content}]\n`;
+            const refCtx = await fetchReferencedContext(thread, message);
+            if (refCtx) {
+                referencedContextBlock = formatReferencedContext(refCtx);
             }
         }
     }
@@ -337,7 +298,7 @@ async function buildEventData(thread: Thread, message: Message): Promise<AgentRu
     return {
         sessionId,
         trigger: adapterName,
-        prompt: `${threadStarterContext}[${adapterName}] ${userName}: ${message.text}`,
+        prompt: `${referencedContextBlock}[${adapterName}] ${userName}: ${message.text}`,
         serializedThread: JSON.stringify(threadImpl.toJSON()),
         ...(isHomeChannel ? { isHomeChannel } : {}),
         ...(thread.isDM ? { isDM: true } : {}),

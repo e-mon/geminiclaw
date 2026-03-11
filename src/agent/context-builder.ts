@@ -14,6 +14,7 @@ import { access, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { ChannelContextData } from '../channels/channel-context.js';
 import { renderChannelContext } from '../channels/channel-context.js';
+import { loadConfig } from '../config.js';
 import type { TriggerType } from './runner.js';
 import { buildSessionContinuation, renderContinuation } from './session/continuation.js';
 import { SessionStore } from './session/store.js';
@@ -272,9 +273,21 @@ export class ContextBuilder {
             parts.push('');
             parts.push('**Every run:** Activity review (digest + summaries), calendar, email.');
             parts.push('**Rotate (every few hours):** Memory maintenance, proactive background work.');
+
+            // Inject home channel so the agent knows where to post notifications
+            const config = loadConfig();
+            const dc = config.channels.discord;
+            const sc = config.channels.slack;
+            if (dc.enabled && dc.homeChannel) {
+                parts.push(`Home channel: discord:${dc.homeChannel}`);
+            } else if (sc.enabled && sc.homeChannel) {
+                parts.push(`Home channel: slack:${sc.homeChannel}`);
+            }
+
             parts.push('');
             parts.push(
-                'After completing checks: reply with summary if you acted, or `HEARTBEAT_OK` if nothing needs attention.',
+                'Post all notifications via `geminiclaw_post_message` to the home channel. ' +
+                    'Always respond with `HEARTBEAT_OK` when done.',
             );
         } else if (options.trigger === 'cron') {
             parts.push('');

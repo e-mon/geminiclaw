@@ -25,6 +25,15 @@ Check the current local time (use `config.timezone`).
 During **23:00–08:00**, only act on truly urgent items (critical emails, imminent deadlines).
 Do NOT send proactive check-ins, weather updates, or casual reminders during quiet hours.
 
+## How to notify
+
+**All notifications must be posted via `geminiclaw_post_message`** to the home channel
+(provided in the Heartbeat Mode context). This ensures your notifications are recorded
+in the home session and included in subsequent digests — preventing duplicate notifications.
+
+Use `geminiclaw_list_channels` to resolve channel names if needed.
+When posting about a specific conversation, post to that channel/thread instead.
+
 ## Step 1: Review recent activity (every run)
 
 Read these sources to build a picture of what's been happening:
@@ -35,8 +44,6 @@ Read these sources to build a picture of what's been happening:
    — these contain rich context (decisions, errors, pending work) that the digest may not capture
 3. Even if the digest says "no new activity", check summaries — the digest only tracks JSONL deltas
 4. Optionally read `memory/logs/YYYY-MM-DD.md` for broader context
-5. **Read your own recent heartbeat session logs** — check what you previously notified the user about
-   so you don't repeat the same information (e.g. same calendar reminder, same weather update)
 
 As you review, look for:
 - **Incomplete work** — tasks the user started but didn't finish, or explicitly said "later" / "TODO"
@@ -65,8 +72,8 @@ Check these on **every heartbeat** — they change frequently and the user needs
 
 ### Calendar
 - Use `gog_calendar_events` to fetch upcoming events (`calendarId: primary`, from: now, to: end of **tomorrow**)
-- **Before notifying**, check your recent heartbeat logs (Step 1-5) to see if you already told the user about this event
-- If an event starts within 30 minutes and hasn't been notified yet, post a reminder
+- **Before notifying**, check the digest — if you already notified about this event, don't repeat
+- If an event starts within 30 minutes and hasn't been notified yet, post a reminder via `geminiclaw_post_message`
 - For tomorrow's events: mention them once in the evening so the user can prepare — don't repeat in subsequent runs
 - Note any scheduling conflicts
 
@@ -74,7 +81,7 @@ Check these on **every heartbeat** — they change frequently and the user needs
 - Use `gog_gmail_search` with two separate parameters:
   - `query`: `"newer_than:1h is:unread"` (Gmail does not support minutes — use 1h as minimum)
   - `max`: `10`
-- If there are urgent or important unread emails, summarize and notify the user
+- If there are urgent or important unread emails, summarize and notify via `geminiclaw_post_message`
 - Skip routine/automated emails (newsletters, CI notifications, etc.)
 
 If the required tools (`gog_calendar_events`, `gog_gmail_search`) are not available, skip silently.
@@ -98,7 +105,6 @@ and recent session timestamps), send a lightweight check-in to the user's home c
 
 ## Step 6: Proactive work (rotate through these)
 
-### Notify on findings
 - If a session had unresolved errors or failed tasks → notify the user with context
 - If work was left incomplete and enough time has passed → send a reminder
 - If you spotted something the user should know about → tell them
@@ -109,13 +115,6 @@ and recent session timestamps), send a lightweight check-in to the user's home c
 - Update documentation that's gone stale
 - Clean up old or redundant memory entries
 
-### How to notify
-- Use `geminiclaw_post_message` to post to the relevant channel/thread
-- Use `geminiclaw_list_channels` to resolve channel names to IDs
-- Post to the specific channel/thread where the conversation happened, not just home channel
-- When posting mid-conversation, acknowledge the context break
-  (e.g. "Quick update on your earlier request — ...")
-
 ### Use your judgment
 You have full context of the user's recent activity. If something feels like it needs
 attention — even if it doesn't fit neatly into the categories above — act on it.
@@ -123,24 +122,10 @@ The user trusts you to be a proactive assistant, not a passive checklist runner.
 
 ## Step 7: Response
 
-Wrap your final human-facing response in `<reply>` tags.
-Everything outside `<reply>` is treated as internal processing notes and will NOT be shown to the user.
+**Always respond with `HEARTBEAT_OK`** (internal pipeline signal — not shown to users).
 
-- If nothing needs attention → `<reply>HEARTBEAT_OK</reply>`
-- If you took meaningful action → write a short, friendly summary inside `<reply>`:
-
-```
-<reply>
-☀️ 天気: 東京は晴れ、最高気温22°C
-📅 明日 13:00 に1ヶ月検診があります
-✉️ 重要なメールはありません
-
-メモリの整理も完了しました。
-</reply>
-```
-
-Keep it concise and conversational — bullet points are fine.
-Do NOT include internal processing steps like "I will now read..." or "I'll check the calendar".
+All user-facing notifications have already been posted via `geminiclaw_post_message`
+in the steps above. Do NOT use `<reply>` tags — they bypass home session recording.
 
 After responding, update `memory/heartbeat-state.json` with the current timestamps
 for each check you actually ran this time.

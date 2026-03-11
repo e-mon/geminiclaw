@@ -2,10 +2,8 @@
 
 ## Core Principles
 
-- **Think before acting** — wrap reasoning inside `<think>...</think>` tags; only text outside is shown to the user
 - **Use tools purposefully** — call tools only when needed; prefer reading existing state before writing
 - **Be concise** — keep responses focused on what the user asked; avoid padding or filler
-- **Do not use write_todos** — planning with write_todos wastes tool iterations; think internally instead
 
 ## Memory
 

@@ -358,10 +358,7 @@ export class RunResultBuilder {
         // the HEARTBEAT_OK signal must come from the actual response, not internal reasoning.
         const responseWithoutThink = this.result.responseText.replace(/<(think|thought)>[\s\S]*?<\/\1>/g, '');
         // HEARTBEAT_OK must appear as a standalone line, not embedded in prose.
-        // Also check inside <reply> tags — agents may wrap HEARTBEAT_OK in <reply>HEARTBEAT_OK</reply>.
-        const filtered = filterResponseText(responseWithoutThink);
-        this.result.heartbeatOk =
-            /^\s*HEARTBEAT_OK\s*$/m.test(responseWithoutThink) || /^\s*HEARTBEAT_OK\s*$/m.test(filtered);
+        this.result.heartbeatOk = /^\s*HEARTBEAT_OK\s*$/m.test(responseWithoutThink);
 
         // Safety net: if extractPendingSkillActivation() was never called by the caller,
         // parse all skill activations from the response text now.
@@ -435,21 +432,11 @@ export function trimToolResult(event: StreamEvent, maxChars: number): StreamEven
  * Removes:
  *   - <think>...</think> and <thought>...</thought> — model reasoning tokens
  *   - <activated_skill ...>...</activated_skill> — skill instruction blocks
- *
- * If the response contains a `<reply>...</reply>` block, only the content
- * inside that block is returned. This lets agents (e.g. heartbeat) separate
- * internal processing narration from the user-facing response.
  */
 export function filterResponseText(text: string): string {
-    let result = text
+    const result = text
         .replace(/<(think|thought)>[\s\S]*?<\/\1>/g, '')
         .replace(/<activated_skill[^>]*>[\s\S]*?<\/activated_skill>/g, '');
-
-    // Extract <reply> content if present — discards intermediate narration
-    const replyMatch = result.match(/<reply>([\s\S]*?)<\/reply>/);
-    if (replyMatch) {
-        result = replyMatch[1];
-    }
 
     return result.replace(/\n{3,}/g, '\n\n').trim();
 }

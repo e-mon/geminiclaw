@@ -58,12 +58,10 @@ export function createHeartbeatCron(intervalMin: number) {
                     sessionId: 'cron:heartbeat',
                     trigger: 'heartbeat',
                     prompt:
-                        'Execute ALL steps in HEARTBEAT.md sequentially — do NOT skip any step. ' +
-                        'Step 1: Read heartbeat-digest.md and review activity. ' +
-                        'Step 2: Read MEMORY.md and update if needed. ' +
-                        'Step 3: Check calendar and email. ' +
-                        'Step 4: Check for pending requests needing follow-up. ' +
-                        'Only after completing every step, reply HEARTBEAT_OK if nothing needs attention.',
+                        'Execute HEARTBEAT.md. ' +
+                        'Review digest, check calendar/email, and handle any needed notifications. ' +
+                        'Post notifications to the home channel via geminiclaw_post_message. ' +
+                        'Always respond with HEARTBEAT_OK when done.',
                     reply: buildHeartbeatReply(),
                 },
             });
