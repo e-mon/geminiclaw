@@ -3,9 +3,10 @@
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { z } from 'zod';
 import { createLogger } from '../logger.js';
-import { GEMINICLAW_HOME, GEMINICLAW_SETTINGS_PATH } from './paths.js';
+import { GEMINICLAW_HOME, GEMINICLAW_SETTINGS_PATH, getMcpDir } from './paths.js';
 
 const log = createLogger('config');
 
@@ -69,13 +70,40 @@ export function loadGeminiclawSettings(): GeminiSettings {
     if (!existsSync(GEMINICLAW_SETTINGS_PATH)) return {};
     try {
         const raw = JSON.parse(readFileSync(GEMINICLAW_SETTINGS_PATH, 'utf-8'));
-        return GeminiSettingsSchema.parse(raw);
+        const settings = GeminiSettingsSchema.parse(raw);
+        rewriteBuiltinMcpPaths(settings);
+        return settings;
     } catch (err) {
         log.warn('Invalid geminiclaw settings, using defaults', {
             path: GEMINICLAW_SETTINGS_PATH,
             error: String(err).substring(0, 200),
         });
         return {};
+    }
+}
+
+/**
+ * Rewrite builtin command-based MCP server args to use the current dist/mcp/
+ * directory. settings.json stores absolute paths from `geminiclaw init`, which
+ * break when the repo is moved or renamed. This resolves paths at runtime.
+ */
+const BUILTIN_MCP_SERVE_FILES: Record<string, string> = {
+    'geminiclaw-status': 'status-serve.js',
+    'geminiclaw-ask-user': 'ask-user-serve.js',
+    'geminiclaw-cron': 'cron-serve.js',
+};
+
+function rewriteBuiltinMcpPaths(settings: GeminiSettings): void {
+    if (!settings.mcpServers) return;
+    const mcpDir = getMcpDir();
+    for (const [name, filename] of Object.entries(BUILTIN_MCP_SERVE_FILES)) {
+        const cfg: McpServerConfig | undefined = settings.mcpServers[name];
+        if (!cfg?.command || !cfg.args?.length) continue;
+        // Replace the first arg that ends with the expected filename
+        const idx = cfg.args.findIndex((a: string) => a.endsWith(filename));
+        if (idx !== -1) {
+            cfg.args[idx] = join(mcpDir, filename);
+        }
     }
 }
 

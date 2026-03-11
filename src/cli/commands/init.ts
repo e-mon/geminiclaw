@@ -12,6 +12,7 @@ import {
     type Config,
     ConfigSchema,
     type GeminiSettings,
+    getMcpDir,
     getWorkspacePath,
     loadConfig,
     loadGeminiclawSettings,
@@ -37,7 +38,7 @@ export async function initializeWorkspace(config: Config): Promise<void> {
     }
 
     // Save GeminiClaw-specific MCP settings to ~/.geminiclaw/settings.json.
-    const mcpDir = join(import.meta.dirname ?? '.', '..', '..', 'mcp');
+    const mcpDir = getMcpDir();
     const gcSettings: GeminiSettings = loadGeminiclawSettings();
     gcSettings.mcpServers ??= {};
 

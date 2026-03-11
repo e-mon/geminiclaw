@@ -19,6 +19,7 @@ export {
     GEMINICLAW_HOME,
     GEMINICLAW_SETTINGS_PATH,
     getGeminiBin,
+    getMcpDir,
     getWorkspacePath,
 } from './paths.js';
 export {

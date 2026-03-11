@@ -16,6 +16,16 @@ export const GEMINICLAW_SETTINGS_PATH = join(GEMINICLAW_HOME, 'settings.json');
 export const BROWSER_PROFILE_DIR = join(GEMINICLAW_HOME, 'browser-profile');
 export const BROWSER_STATE_PATH = join(GEMINICLAW_HOME, 'browser-auth-state.json');
 
+/**
+ * Resolve the `dist/mcp/` directory at runtime.
+ *
+ * This file lives at `dist/config/paths.js`, so `../mcp` resolves to
+ * `dist/mcp/` regardless of where the package is installed.
+ */
+export function getMcpDir(): string {
+    return join(import.meta.dirname ?? dirname(fileURLToPath(import.meta.url)), '..', 'mcp');
+}
+
 export function getWorkspacePath(config?: Config): string {
     if (config?.workspace) return config.workspace;
     return join(GEMINICLAW_HOME, 'workspace');
