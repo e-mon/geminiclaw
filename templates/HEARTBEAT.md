@@ -38,12 +38,9 @@ When posting about a specific conversation, post to that channel/thread instead.
 
 Read these sources to build a picture of what's been happening:
 
-1. Read `memory/heartbeat-digest.md` — real-time session deltas since your last run
-   (auto-generated, do NOT read raw JSONL files unless the digest is insufficient)
-2. **Always** list `memory/summaries/` and read today's session summaries (files starting with today's date)
-   — these contain rich context (decisions, errors, pending work) that the digest may not capture
-3. Even if the digest says "no new activity", check summaries — the digest only tracks JSONL deltas
-4. Optionally read `memory/logs/YYYY-MM-DD.md` for broader context
+1. `memory/heartbeat-digest.md` — auto-generated session deltas since last run
+2. Read the most recent files in `memory/summaries/` — session summaries with richer context (decisions, errors, pending work)
+3. `memory/logs/YYYY-MM-DD.md` — daily activity log (for broader context)
 
 As you review, look for:
 - **Incomplete work** — tasks the user started but didn't finish, or explicitly said "later" / "TODO"
@@ -122,10 +119,6 @@ The user trusts you to be a proactive assistant, not a passive checklist runner.
 
 ## Step 7: Response
 
-**Always respond with `HEARTBEAT_OK`** (internal pipeline signal — not shown to users).
+**Always respond with `HEARTBEAT_OK`** (internal pipeline signal).
 
-All user-facing notifications have already been posted via `geminiclaw_post_message`
-in the steps above. Do NOT use `<reply>` tags — they bypass home session recording.
-
-After responding, update `memory/heartbeat-state.json` with the current timestamps
-for each check you actually ran this time.
+After responding, update `memory/heartbeat-state.json` with timestamps for checks you ran.

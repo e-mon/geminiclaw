@@ -156,7 +156,6 @@ async function downloadAttachments(
         }
 
         try {
-            // biome-ignore lint: url is guaranteed non-null by the guard above
             const data = fetchData ? await fetchData() : await fetchFromUrl(url as string);
             if (data.length > MAX_ATTACHMENT_BYTES) {
                 log.warn('attachment too large, skipping', { name, size: data.length });
