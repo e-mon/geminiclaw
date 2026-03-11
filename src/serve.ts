@@ -358,13 +358,13 @@ export function createPreviewServer(
     const previewApp = express();
     const previewDir = getPreviewDir(workspacePath);
 
-    // Restrictive CSP — agent-generated HTML may contain trusted inline
-    // scripts (e.g. translate-preview toggle) but must not load external
-    // resources or make network requests back to the main server.
+    // CSP — agent-generated HTML may contain trusted inline scripts
+    // (e.g. translate-preview toggle) and external resources from the
+    // original article (images, stylesheets, fonts, embedded iframes).
     previewApp.use((_req, res, next) => {
         res.setHeader(
             'Content-Security-Policy',
-            "default-src 'none'; script-src 'unsafe-inline'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self'",
+            "default-src 'none'; script-src 'unsafe-inline'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline' https:; font-src 'self' https:; frame-src https:",
         );
         res.setHeader('X-Content-Type-Options', 'nosniff');
         res.setHeader('X-Frame-Options', 'DENY');
