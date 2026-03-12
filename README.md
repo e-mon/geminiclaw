@@ -243,7 +243,7 @@ src/
 ├── config/            Zod schema, config I/O, paths, Gemini CLI settings
 ├── memory/            SQLite usage tracking, QMD integration
 ├── mcp/               MCP servers (status, cron, ask-user, gog, admin)
-├── channels/          Chat SDK adapters + reply delivery (Discord/Slack)
+├── channels/          Chat SDK adapters + reply delivery (Discord/Slack/Telegram)
 ├── inngest/           Durable functions (agent-run, heartbeat, cron, daily-summary)
 ├── cli/commands/      CLI command implementations
 ├── vault/             Secret management (keyring/encrypted-file/command)

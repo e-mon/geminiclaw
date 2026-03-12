@@ -18,7 +18,7 @@ let chatInstance: Chat | undefined;
 /**
  * Create and configure the Chat SDK instance.
  *
- * Registers Discord and Slack adapters based on the provided config.
+ * Registers Discord, Slack, and Telegram adapters based on the provided config.
  * Calls `registerSingleton()` so `ThreadImpl.fromJSON()` works globally.
  *
  * Args:

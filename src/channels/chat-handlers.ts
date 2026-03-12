@@ -315,7 +315,7 @@ async function buildEventData(thread: Thread, message: Message): Promise<AgentRu
 /**
  * Check if a message in a non-subscribed, non-mention context should be handled.
  *
- * For Discord/Slack: only respond in channels listed in respondInChannels.
+ * For Discord/Slack/Telegram: only respond in channels listed in respondInChannels.
  * For other adapters: never respond (require @mention or subscription).
  *
  * Args:

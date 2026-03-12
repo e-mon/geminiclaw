@@ -130,7 +130,7 @@ Gemini CLI's ACP does not support native `ask_user` prompts, and the MCP specifi
 
 ```
 1. MCP tool → writes ask-user-pending-{askId}.json
-2. Runner  → detects file → sends button message to chat (Discord/Slack)
+2. Runner  → detects file → sends button message to chat (Discord/Slack/Telegram)
 3. User    → clicks button
 4. Chat handler → writes ask-user-answer-{askId}.json
 5. MCP tool → detects file (500ms polling) → continue or abort

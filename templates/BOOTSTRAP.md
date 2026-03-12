@@ -27,7 +27,7 @@ Ask if they want a daily briefing delivered to a channel each morning. If yes:
    - `id`: `"daily-briefing"`
    - `schedule`: `{ "type": "cron", "expression": "0 <hour> * * *" }`
    - `prompt`: `"daily-briefing skill to execute. Aggregate yesterday's session summaries, today's calendar, email, and tasks into a prioritized briefing."`
-   - `reply`: `{ "channel": "<discord|slack>", "channelId": "<selected channel ID>" }`
+   - `reply`: `{ "channel": "<discord|slack|telegram>", "channelId": "<selected channel ID>" }`
 
 If they decline or want to set it up later, skip this step.
 
