@@ -106,6 +106,7 @@ async function stepDiscord(): Promise<void> {
 /** Parse a "platform:channelId" value, splitting only on the first colon. */
 function parseHomeValue(value: string): { channel: string; channelId: string } {
     const idx = value.indexOf(':');
+    if (idx === -1) throw new Error(`Invalid channel value (expected "platform:id"): ${value}`);
     return { channel: value.slice(0, idx), channelId: value.slice(idx + 1) };
 }
 
@@ -187,15 +188,22 @@ async function stepHome(): Promise<void> {
                         options: [
                             { value: 'retry', label: 'Retry', hint: 'Wait another 2 minutes' },
                             { value: 'manual', label: 'Enter chat ID manually' },
+                            { value: 'skip', label: 'Skip', hint: 'Use another channel as home' },
                         ],
                     });
                     exitIfCancelled(action);
 
-                    if (action === 'manual') {
+                    if (action === 'skip') {
+                        discovered = true;
+                    } else if (action === 'manual') {
                         const manual = await p.text({
                             message: 'Telegram chat ID (e.g. -1001234567890)',
                             placeholder: '-1001234567890',
-                            validate: (v) => (v ? undefined : 'Chat ID is required'),
+                            validate: (v) => {
+                                if (!v) return 'Chat ID is required';
+                                if (!/^-?\d+$/.test(v)) return 'Chat ID must be a number (e.g. -1001234567890)';
+                                return undefined;
+                            },
                         });
                         exitIfCancelled(manual);
                         allOptions.push({

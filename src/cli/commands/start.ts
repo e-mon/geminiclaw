@@ -203,6 +203,7 @@ export function registerStartCommand(program: Command): void {
 
             const slackConnected =
                 config.channels.slack.enabled && !!config.channels.slack.token && !!config.channels.slack.signingSecret;
+            const telegramConnected = config.channels.telegram.enabled && !!config.channels.telegram.botToken;
 
             // ── Bootstrap greeting — nudge setup in home channel ──
             await sendBootstrapGreeting(config, chat, { discordConnected, slackConnected });
@@ -232,7 +233,7 @@ export function registerStartCommand(program: Command): void {
             }
 
             // ── All initialization complete — print startup banner ──
-            printBanner(port, { discordConnected, slackConnected, previewUrl, mcpProbes });
+            printBanner(port, { discordConnected, slackConnected, telegramConnected, previewUrl, mcpProbes });
         });
 }
 
@@ -423,6 +424,7 @@ async function sendBootstrapGreeting(
 interface BannerOptions {
     discordConnected: boolean;
     slackConnected: boolean;
+    telegramConnected: boolean;
     previewUrl?: string;
     mcpProbes?: import('../../dashboard/mcp-probe.js').McpServerProbe[];
 }
@@ -484,7 +486,7 @@ ${b}   Server${r}      ${c}http://localhost:${port}${r}
 ${b}   Dashboard${r}   ${c}http://localhost:${port}/dashboard${r}
 ${b}   Health${r}      ${c}http://localhost:${port}/health${r}${opts.previewUrl ? `\n${b}   Preview${r}     ${c}${opts.previewUrl}${r}` : ''}
 ${d}  ──────────────────────────────────────────────────────────────────────────────${r}
-   ${dot(opts.discordConnected)} Discord   ${dot(opts.slackConnected)} Slack${mcpSection}
+   ${dot(opts.discordConnected)} Discord   ${dot(opts.slackConnected)} Slack   ${dot(opts.telegramConnected)} Telegram${mcpSection}
 ${d}  ──────────────────────────────────────────────────────────────────────────────${r}
    ${y}Ready${r}
 `);

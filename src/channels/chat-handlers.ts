@@ -131,6 +131,12 @@ function deriveChannelSessionPrefix(thread: Thread): string {
         return `slack-${channel}`;
     }
 
+    if (adapterName === 'telegram') {
+        const chatId = parts[1] ?? '';
+        if (thread.isDM) return `telegram-dm-${chatId}`;
+        return `telegram-${chatId}`;
+    }
+
     return `${adapterName}-${parts.slice(0, -1).join('-')}`;
 }
 

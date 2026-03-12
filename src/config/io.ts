@@ -167,18 +167,26 @@ function migrateLegacyConfig(obj: Record<string, unknown>): boolean {
         migrated = true;
     }
 
-    // 2. Migrate legacy per-platform homeChannel → top-level `home`
+    // 2. Migrate legacy per-platform homeChannel → top-level `home`.
+    // Prefer enabled platforms; fall back to disabled ones to avoid data loss.
     if (!obj.home) {
         const channels = obj.channels as Record<string, Record<string, unknown>> | undefined;
         if (channels) {
+            let fallback: { channel: string; channelId: string } | undefined;
             for (const platform of ['discord', 'slack', 'telegram'] as const) {
                 const ch = channels[platform];
-                if (ch?.enabled && typeof ch.homeChannel === 'string' && ch.homeChannel) {
-                    obj.home = { channel: platform, channelId: ch.homeChannel };
-                    migrated = true;
-                    break;
+                if (typeof ch?.homeChannel === 'string' && ch.homeChannel) {
+                    if (ch.enabled) {
+                        obj.home = { channel: platform, channelId: ch.homeChannel };
+                        break;
+                    }
+                    fallback ??= { channel: platform, channelId: ch.homeChannel };
                 }
             }
+            if (!obj.home && fallback) {
+                obj.home = fallback;
+            }
+            if (obj.home) migrated = true;
         }
     }
 

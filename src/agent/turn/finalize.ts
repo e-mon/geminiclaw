@@ -75,16 +75,18 @@ async function notifyBackgroundJob(ctx: DeliverContext): Promise<void> {
             : `\u2705 **Cron done: ${jobId}**`;
     }
 
-    if (ctx.config.notifications) {
+    // Fall back to home channel when dedicated notifications channel is not configured
+    const notifTarget = ctx.config.notifications ?? ctx.config.home;
+    if (notifTarget) {
         promises.push(
             postToChannel({
-                channelType: ctx.config.notifications.channel,
-                channelId: ctx.config.notifications.channelId,
+                channelType: notifTarget.channel,
+                channelId: notifTarget.channelId,
                 text,
                 config: ctx.config,
             }).catch((err) => {
                 log.warn('job notification failed', {
-                    channelType: ctx.config.notifications?.channel,
+                    channelType: notifTarget.channel,
                     error: String(err),
                 });
             }),

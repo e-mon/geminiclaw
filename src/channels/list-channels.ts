@@ -128,6 +128,7 @@ export async function pollForTelegramChat(botToken: string, timeoutMs: number): 
             if (remaining <= 0) break;
             const res = await fetch(
                 `https://api.telegram.org/bot${botToken}/getUpdates?offset=${offset}&timeout=${remaining}&limit=1`,
+                { signal: AbortSignal.timeout((remaining + 5) * 1000) },
             );
             if (!res.ok) break;
             const body = (await res.json()) as { ok: boolean; result?: TelegramUpdate[] };
