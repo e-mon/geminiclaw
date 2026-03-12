@@ -8,6 +8,7 @@
         "@chat-adapter/discord": "^4.18.0",
         "@chat-adapter/slack": "^4.14.0",
         "@chat-adapter/state-memory": "^4.14.0",
+        "@chat-adapter/telegram": "4.20.0",
         "@clack/prompts": "^1.0.1",
         "@google/gemini-cli": "0.34.0-nightly.20260307.6c3a90645",
         "@mariozechner/pi-tui": "^0.54.2",
@@ -83,6 +84,8 @@
     "@chat-adapter/slack": ["@chat-adapter/slack@4.14.0", "", { "dependencies": { "@chat-adapter/shared": "4.14.0", "@slack/web-api": "^7.11.0", "chat": "4.14.0" } }, "sha512-IJ0cJ3QC1f/inieA12VIhoJCap59kQbT4xovt52OU9WtTy4zGkxKIgEem7jA+KcbxeepoypmNIpTy8QSUMZBnQ=="],
 
     "@chat-adapter/state-memory": ["@chat-adapter/state-memory@4.14.0", "", { "dependencies": { "chat": "4.14.0" } }, "sha512-6YWMok5/1tS81lXspXhObmXVN+Zaopdd4ZMMh3r2WVeCCLCvbRYz9X9tqA+QuI2XCWxUcAPuWavFATgn+PdkLw=="],
+
+    "@chat-adapter/telegram": ["@chat-adapter/telegram@4.20.0", "", { "dependencies": { "@chat-adapter/shared": "4.20.0", "chat": "4.20.0" } }, "sha512-zNmTA6e+dy21sdYafe/V3Ytd5id9SeRweWOUERmg4OK2w8PXIsyniGusW1agd0vcl2ERQF/mRcuHLPVV379Mww=="],
 
     "@clack/core": ["@clack/core@1.0.1", "", { "dependencies": { "picocolors": "^1.0.0", "sisteransi": "^1.0.5" } }, "sha512-WKeyK3NOBwDOzagPR5H08rFk9D/WuN705yEbuZvKqlkmoLM2woKtXb10OO2k1NoSU4SFG947i2/SCYh+2u5e4g=="],
 
@@ -1523,6 +1526,10 @@
     "@chat-adapter/shared/chat": ["chat@4.18.0", "", { "dependencies": { "@workflow/serde": "4.1.0-beta.2", "mdast-util-to-string": "^4.0.0", "remark-gfm": "^4.0.0", "remark-parse": "^11.0.0", "remark-stringify": "^11.0.0", "remend": "^1.2.1", "unified": "^11.0.5" } }, "sha512-SrBPE+MjsHEc1DFS77IYftFw4IDgrQt7khZU5WQ4QIGI5I4DdOr+KZkRrwWLIyVCuEZjduEgHq1eHWtLCHH6YQ=="],
 
     "@chat-adapter/slack/@chat-adapter/shared": ["@chat-adapter/shared@4.14.0", "", { "dependencies": { "chat": "4.14.0" } }, "sha512-D6OCFlO7g8Tvq6YJ06c0KkEtR4XKFx0FLCGV93AtRrww9mE9MBKEgeQwJosFRMt7y21n6XJK1n/BPZDnTveNZg=="],
+
+    "@chat-adapter/telegram/@chat-adapter/shared": ["@chat-adapter/shared@4.20.0", "", { "dependencies": { "chat": "4.20.0" } }, "sha512-PaN3TADZUswD5VNV5qMS5M316PP9hp14lGHNa5SB8s7LN5PGXuXUroO0e7rjyo18i7jNKsalJUjpD/uoEg0u3Q=="],
+
+    "@chat-adapter/telegram/chat": ["chat@4.20.0", "", { "dependencies": { "@workflow/serde": "4.1.0-beta.2", "mdast-util-to-string": "^4.0.0", "remark-gfm": "^4.0.0", "remark-parse": "^11.0.0", "remark-stringify": "^11.0.0", "remend": "^1.2.1", "unified": "^11.0.5" } }, "sha512-9/SvX0wM1AZa7VyibyVjRkb3WsbmSbIm54i1MMtzFQEj96oAisFdxkRoBKQDZ4R9tfLe7f6SOwWIHqwCGaCxoA=="],
 
     "@discordjs/builders/discord-api-types": ["discord-api-types@0.38.40", "", {}, "sha512-P/His8cotqZgQqrt+hzrocp9L8RhQQz1GkrCnC9TMJ8Uw2q0tg8YyqJyGULxhXn/8kxHETN4IppmOv+P2m82lQ=="],
 

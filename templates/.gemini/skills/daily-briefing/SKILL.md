@@ -14,7 +14,7 @@ Generate a concise, prioritized daily briefing. Works standalone with core Gemin
 1. Gather   → Pull data from available sources (parallel)
 2. Analyze  → Prioritize and detect conflicts/urgencies
 3. Format   → Produce scannable briefing
-4. Deliver  → Post to homeChannel via geminiclaw_post_message
+4. Deliver  → Post to home channel via geminiclaw_post_message
 ```
 
 ## Phase 1: Gather Data
@@ -128,9 +128,9 @@ Produce a concise briefing. Target: **under 2 minutes to read**.
 
 ## Phase 4: Deliver
 
-Post the briefing to homeChannel via `geminiclaw_post_message`.
+Post the briefing to home channel via `geminiclaw_post_message`.
 
-When triggered manually, reply directly in the conversation instead of posting to homeChannel.
+When triggered manually, reply directly in the conversation instead of posting to home channel.
 
 ## Cron Setup
 

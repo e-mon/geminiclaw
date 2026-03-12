@@ -79,6 +79,15 @@ function deriveSessionId(thread: Thread, tz?: string): string {
         return threadTs ? `slack-${channel}-${threadTs}` : `slack-${channel}-${dateSuffix}`;
     }
 
+    if (adapterName === 'telegram') {
+        // thread.id = "telegram:chatId" or "telegram:chatId:messageThreadId"
+        const chatId = parts[1] ?? '';
+        if (thread.isDM) {
+            return `telegram-dm-${chatId}-${dateSuffix}`;
+        }
+        return `telegram-${chatId}-${dateSuffix}`;
+    }
+
     // Fallback for unknown adapters
     return `${adapterName}-${thread.id}`;
 }
@@ -95,6 +104,7 @@ function extractRawChannelId(thread: Thread): string {
     const parts = thread.id.split(':');
     if (thread.adapter.name === 'discord') return parts[2] ?? '';
     if (thread.adapter.name === 'slack') return parts[1] ?? '';
+    if (thread.adapter.name === 'telegram') return parts[1] ?? '';
     return thread.channelId;
 }
 
@@ -285,14 +295,9 @@ async function buildEventData(thread: Thread, message: Message): Promise<AgentRu
     }
 
     // Determine if this is the configured home channel
-    const homeChannelId =
-        adapterName === 'discord'
-            ? config.channels.discord.homeChannel
-            : adapterName === 'slack'
-              ? config.channels.slack.homeChannel
-              : undefined;
     const rawChannelId = extractRawChannelId(thread);
-    const isHomeChannel = !!homeChannelId && rawChannelId === homeChannelId;
+    const isHomeChannel =
+        !!config.home && config.home.channel === adapterName && rawChannelId === config.home.channelId;
 
     return {
         sessionId,

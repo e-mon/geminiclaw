@@ -108,6 +108,28 @@ export const ConfigSchema = z.object({
                 .default({}),
         })
         .default({}),
+    /**
+     * Unified home channel for bootstrap greetings, heartbeat results, and cron fallback.
+     * Format: { channel: 'discord' | 'slack' | 'telegram', channelId: string }
+     */
+    home: z
+        .object({
+            channel: z.string(),
+            channelId: z.string(),
+        })
+        .optional(),
+    /**
+     * Notification destination for background job completion/failure notices.
+     * Optional — when unset, no channel notifications are sent (desktop-only if enabled).
+     * Format: { channel: 'discord' | 'slack' | 'telegram', channelId: string }
+     */
+    notifications: z
+        .object({
+            channel: z.string(),
+            channelId: z.string(),
+        })
+        .optional()
+        .catch(undefined),
     channels: z
         .object({
             discord: z
@@ -115,16 +137,17 @@ export const ConfigSchema = z.object({
                     token: z.string().optional(),
                     enabled: z.boolean().default(false),
                     /**
-                     * Primary channel for the agent. Bootstrap greetings and heartbeat
-                     * notifications are sent here. Automatically included in respondInChannels.
-                     */
-                    homeChannel: z.string().optional(),
-                    /**
                      * Channel IDs where the bot responds to all messages without requiring @mention.
-                     * homeChannel is automatically included at runtime — no need to list it here.
+                     * home channel is automatically included at runtime — no need to list it here.
                      * Can be updated by the agent via {workspace}/config.json.
                      */
                     respondInChannels: z.array(z.string()).default([]),
+                })
+                .default({}),
+            telegram: z
+                .object({
+                    enabled: z.boolean().default(false),
+                    botToken: z.string().optional(),
                 })
                 .default({}),
             slack: z
@@ -133,13 +156,8 @@ export const ConfigSchema = z.object({
                     signingSecret: z.string().optional(),
                     enabled: z.boolean().default(false),
                     /**
-                     * Primary channel for the agent. Bootstrap greetings and heartbeat
-                     * notifications are sent here. Automatically included in respondInChannels.
-                     */
-                    homeChannel: z.string().optional(),
-                    /**
                      * Channel IDs where the bot responds to all messages without requiring @mention.
-                     * homeChannel is automatically included at runtime — no need to list it here.
+                     * home channel is automatically included at runtime — no need to list it here.
                      * Can be updated by the agent via {workspace}/config.json.
                      */
                     respondInChannels: z.array(z.string()).default([]),

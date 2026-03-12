@@ -352,19 +352,19 @@ async function sendBootstrapGreeting(
         'Shall we?',
     ].join('\n');
 
-    if (opts.discordConnected && config.channels.discord.homeChannel && config.channels.discord.token) {
+    if (!config.home) return;
+    const { channel, channelId } = config.home;
+
+    if (channel === 'discord' && opts.discordConnected && config.channels.discord.token) {
         try {
-            const res = await fetch(
-                `https://discord.com/api/v10/channels/${config.channels.discord.homeChannel}/messages`,
-                {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        Authorization: `Bot ${config.channels.discord.token}`,
-                    },
-                    body: JSON.stringify({ content: message }),
+            const res = await fetch(`https://discord.com/api/v10/channels/${channelId}/messages`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bot ${config.channels.discord.token}`,
                 },
-            );
+                body: JSON.stringify({ content: message }),
+            });
             if (!res.ok) {
                 const body = await res.text();
                 process.stderr.write(`[geminiclaw] Bootstrap greeting failed (${res.status}): ${body}\n`);
@@ -376,7 +376,7 @@ async function sendBootstrapGreeting(
         }
     }
 
-    if (opts.slackConnected && config.channels.slack.homeChannel && config.channels.slack.token) {
+    if (channel === 'slack' && opts.slackConnected && config.channels.slack.token) {
         try {
             const res = await fetch('https://slack.com/api/chat.postMessage', {
                 method: 'POST',
@@ -384,9 +384,8 @@ async function sendBootstrapGreeting(
                     'Content-Type': 'application/json',
                     Authorization: `Bearer ${config.channels.slack.token}`,
                 },
-                body: JSON.stringify({ channel: config.channels.slack.homeChannel, text: message }),
+                body: JSON.stringify({ channel: channelId, text: message }),
             });
-            // Slack API returns HTTP 200 even on errors; check body.ok
             const body = (await res.json()) as { ok: boolean; error?: string };
             if (!res.ok || !body.ok) {
                 process.stderr.write(
@@ -397,6 +396,24 @@ async function sendBootstrapGreeting(
             }
         } catch (err) {
             process.stderr.write(`[geminiclaw] Failed to send bootstrap greeting to Slack: ${String(err)}\n`);
+        }
+    }
+
+    if (channel === 'telegram' && config.channels.telegram.botToken) {
+        try {
+            const res = await fetch(`https://api.telegram.org/bot${config.channels.telegram.botToken}/sendMessage`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ chat_id: channelId, text: message }),
+            });
+            if (!res.ok) {
+                const body = await res.text();
+                process.stderr.write(`[geminiclaw] Bootstrap greeting failed (${res.status}): ${body}\n`);
+            } else {
+                process.stderr.write('[geminiclaw] Bootstrap greeting sent to Telegram home channel\n');
+            }
+        } catch (err) {
+            process.stderr.write(`[geminiclaw] Failed to send bootstrap greeting to Telegram: ${String(err)}\n`);
         }
     }
 }

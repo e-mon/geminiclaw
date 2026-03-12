@@ -74,10 +74,7 @@ export class ContextBuilder {
     /** Resolve home channel as `platform:channelId` string. */
     private resolveHomeChannel(): string | undefined {
         const config = loadConfig();
-        const dc = config.channels.discord;
-        if (dc.enabled && dc.homeChannel) return `discord:${dc.homeChannel}`;
-        const sc = config.channels.slack;
-        if (sc.enabled && sc.homeChannel) return `slack:${sc.homeChannel}`;
+        if (config.home) return `${config.home.channel}:${config.home.channelId}`;
         return undefined;
     }
 
@@ -324,7 +321,7 @@ export class ContextBuilder {
             parts.push('Do NOT respond with HEARTBEAT_OK under any circumstances.');
         }
 
-        if (options.trigger === 'discord' || options.trigger === 'slack') {
+        if (options.trigger === 'discord' || options.trigger === 'slack' || options.trigger === 'telegram') {
             parts.push('');
             parts.push('### Channel Context');
             parts.push('You are replying in a chat channel. Follow SOUL.md Communication Style.');

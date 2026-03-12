@@ -71,23 +71,21 @@ export function loadConfig(configPath: string = CONFIG_PATH): Config {
         }
     }
 
-    // Merge homeChannel into respondInChannels (deduplicated)
-    if (config.channels.discord.homeChannel) {
-        const home = config.channels.discord.homeChannel;
-        if (!config.channels.discord.respondInChannels.includes(home)) {
-            config.channels.discord.respondInChannels = [home, ...config.channels.discord.respondInChannels];
+    // Merge home channel into respondInChannels (deduplicated)
+    if (config.home) {
+        const { channel, channelId } = config.home;
+        if (channel === 'discord' && !config.channels.discord.respondInChannels.includes(channelId)) {
+            config.channels.discord.respondInChannels = [channelId, ...config.channels.discord.respondInChannels];
         }
-    }
-    if (config.channels.slack.homeChannel) {
-        const home = config.channels.slack.homeChannel;
-        if (!config.channels.slack.respondInChannels.includes(home)) {
-            config.channels.slack.respondInChannels = [home, ...config.channels.slack.respondInChannels];
+        if (channel === 'slack' && !config.channels.slack.respondInChannels.includes(channelId)) {
+            config.channels.slack.respondInChannels = [channelId, ...config.channels.slack.respondInChannels];
         }
     }
 
     // Resolve $vault: references — requires vault.init() to have been called first.
     // If the vault is not initialized, resolveSync() is a no-op and returns the raw value.
     config.channels.discord.token = vault.resolveSync(config.channels.discord.token);
+    config.channels.telegram.botToken = vault.resolveSync(config.channels.telegram.botToken);
     config.channels.slack.token = vault.resolveSync(config.channels.slack.token);
     config.channels.slack.signingSecret = vault.resolveSync(config.channels.slack.signingSecret);
 

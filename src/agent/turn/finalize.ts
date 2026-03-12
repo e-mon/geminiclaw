@@ -98,6 +98,21 @@ async function notifyBackgroundJob(ctx: DeliverContext): Promise<void> {
         );
     }
 
+    // Unified notifications channel (config.notifications)
+    const unified = ctx.config.notifications;
+    if (unified) {
+        promises.push(
+            postToChannel({
+                channelType: unified.channel as 'discord' | 'slack' | 'telegram',
+                channelId: unified.channelId,
+                text,
+                config: ctx.config,
+            }).catch((err) => {
+                log.warn('job notification failed', { channelType: unified.channel, error: String(err) });
+            }),
+        );
+    }
+
     await Promise.allSettled(promises);
 }
 

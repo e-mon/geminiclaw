@@ -101,13 +101,14 @@ describe('loadConfig / patchConfigFile', () => {
     it('deep merges nested keys without clobbering siblings', () => {
         // Set up initial config with discord token
         patchConfigFile({ channels: { discord: { token: 'my-token', enabled: true } } }, configPath);
-        // Patch homeChannel — should NOT erase token/enabled
-        patchConfigFile({ channels: { discord: { homeChannel: '123456' } } }, configPath);
+        // Patch home — should NOT erase channels.discord.token/enabled
+        patchConfigFile({ home: { channel: 'discord', channelId: '123456' } }, configPath);
 
         const raw = JSON.parse(readFileSync(configPath, 'utf-8'));
         expect(raw.channels.discord.token).toBe('my-token');
         expect(raw.channels.discord.enabled).toBe(true);
-        expect(raw.channels.discord.homeChannel).toBe('123456');
+        expect(raw.home.channel).toBe('discord');
+        expect(raw.home.channelId).toBe('123456');
     });
 
     it('creates directory when patching', () => {

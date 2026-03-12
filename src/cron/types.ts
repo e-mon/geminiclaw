@@ -17,9 +17,9 @@ export interface CronJob {
     model?: string;
     /** Auto-delete job from jobs.json after successful run. Default: true for `at`, false otherwise. */
     deleteAfterRun?: boolean;
-    /** Delivery target for geminiclaw_post_message. Falls back to homeChannel if omitted. */
+    /** Delivery target for geminiclaw_post_message. Falls back to config.home if omitted. */
     reply?: {
-        channel: 'discord' | 'slack';
+        channel: 'discord' | 'slack' | 'telegram';
         channelId: string;
     };
     createdAt: string;

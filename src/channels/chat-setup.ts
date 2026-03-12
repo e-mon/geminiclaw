@@ -1,7 +1,7 @@
 /**
  * channels/chat-setup.ts — Chat SDK factory and singleton management.
  *
- * Creates a Chat instance with Discord/Slack adapters based on config.
+ * Creates a Chat instance with Discord/Slack/Telegram adapters based on config.
  * The instance is registered as a singleton so serialized threads
  * can be deserialized anywhere (e.g. in Inngest steps).
  */
@@ -86,6 +86,16 @@ export async function createChat(config: Config): Promise<Chat> {
             signingSecret: config.channels.slack.signingSecret,
         });
         log.info('slack adapter registered');
+    }
+
+    // Telegram adapter: bot token + long polling
+    if (config.channels.telegram.enabled && config.channels.telegram.botToken) {
+        const { createTelegramAdapter } = await import('@chat-adapter/telegram');
+        adapters.telegram = createTelegramAdapter({
+            botToken: config.channels.telegram.botToken,
+            mode: 'polling',
+        });
+        log.info('telegram adapter registered');
     }
 
     const chat = new Chat({

@@ -12,7 +12,7 @@ Explore the web based on the user's interests and share discoveries like a curio
 1. Read     → USER.md (Interests + Work Context + sources) + prior state
 2. Explore  → Route to the right source tool per topic
 3. Filter   → "Would I tell a friend about this?"
-4. Share    → Conversational message to homeChannel (or stay silent)
+4. Share    → Conversational message to home channel (or stay silent)
 5. Record   → Update state + findings log
 ```
 
@@ -21,7 +21,7 @@ Explore the web based on the user's interests and share discoveries like a curio
 - **Cron job** — scheduled every 4-8 hours with a lightweight model (e.g. `gemini-2.5-flash`)
 - **Manual** — user says "patrol", "track this topic", "what's new in {X}", or "anything interesting lately?"
 
-When triggered manually, reply directly in the conversation instead of posting to homeChannel.
+When triggered manually, reply directly in the conversation instead of posting to home channel.
 
 ## Execution Flow
 
@@ -82,7 +82,7 @@ Use your judgment. If nothing clears the bar, share nothing — silence is bette
 
 Check the current time via `geminiclaw_status`. Respect **quiet hours (23:00–08:00)** — defer delivery until morning.
 
-Post to homeChannel via `geminiclaw_post_message`. Limit to **1-2 topics per message**.
+Post to home channel via `geminiclaw_post_message`. Limit to **1-2 topics per message**.
 
 **Tone**: natural, conversational. Explain WHY it's interesting, not just WHAT it is. Connect it to the user's current work. End with a question or action prompt.
 

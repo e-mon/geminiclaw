@@ -61,6 +61,99 @@ export async function fetchDiscordChannels(token: string): Promise<ChannelEntry[
 /**
  * Fetch public channels from a Slack workspace.
  */
+interface TelegramChat {
+    id: number;
+    type: string;
+    title?: string;
+    first_name?: string;
+    last_name?: string;
+    username?: string;
+}
+
+interface TelegramUpdate {
+    update_id: number;
+    message?: { chat: TelegramChat };
+}
+
+/**
+ * Fetch chats the Telegram bot has already received messages from.
+ * Uses getUpdates to discover chats — the Bot API has no "list chats" endpoint.
+ */
+export async function fetchTelegramChats(botToken: string): Promise<ChannelEntry[]> {
+    try {
+        const res = await fetch(`https://api.telegram.org/bot${botToken}/getUpdates?limit=100`);
+        if (!res.ok) return [];
+        const body = (await res.json()) as { ok: boolean; result?: TelegramUpdate[] };
+        if (!body.ok || !body.result) return [];
+
+        const seen = new Map<number, TelegramChat>();
+        for (const update of body.result) {
+            const chat = update.message?.chat;
+            if (chat && !seen.has(chat.id)) {
+                seen.set(chat.id, chat);
+            }
+        }
+
+        return [...seen.values()].map((chat) => ({
+            id: String(chat.id),
+            name: chat.title ?? chat.first_name ?? chat.username ?? String(chat.id),
+            group: chat.type === 'private' ? 'DM' : chat.type,
+        }));
+    } catch {
+        return [];
+    }
+}
+
+/**
+ * Poll for a new Telegram message. Waits until a message arrives or timeout.
+ * Returns the first discovered chat, or null on timeout.
+ */
+export async function pollForTelegramChat(botToken: string, timeoutMs: number): Promise<ChannelEntry | null> {
+    const deadline = Date.now() + timeoutMs;
+    let offset = 0;
+
+    // Get the current offset to skip old messages
+    try {
+        const res = await fetch(`https://api.telegram.org/bot${botToken}/getUpdates?limit=1`);
+        if (res.ok) {
+            const body = (await res.json()) as { ok: boolean; result?: TelegramUpdate[] };
+            if (body.ok && body.result && body.result.length > 0) {
+                offset = (body.result[body.result.length - 1] as TelegramUpdate).update_id + 1;
+            }
+        }
+    } catch {
+        /* ignore */
+    }
+
+    while (Date.now() < deadline) {
+        try {
+            const remaining = Math.min(30, Math.ceil((deadline - Date.now()) / 1000));
+            if (remaining <= 0) break;
+            const res = await fetch(
+                `https://api.telegram.org/bot${botToken}/getUpdates?offset=${offset}&timeout=${remaining}&limit=1`,
+            );
+            if (!res.ok) break;
+            const body = (await res.json()) as { ok: boolean; result?: TelegramUpdate[] };
+            if (body.ok && body.result && body.result.length > 0) {
+                const chat = body.result[0]?.message?.chat;
+                if (chat) {
+                    return {
+                        id: String(chat.id),
+                        name: chat.title ?? chat.first_name ?? chat.username ?? String(chat.id),
+                        group: chat.type === 'private' ? 'DM' : chat.type,
+                    };
+                }
+            }
+        } catch {
+            break;
+        }
+    }
+    return null;
+}
+
+/**
+ * Fetch public channels from a Slack workspace.
+ */
 export async function fetchSlackChannels(token: string): Promise<ChannelEntry[]> {
     try {
         const res = await fetch(
