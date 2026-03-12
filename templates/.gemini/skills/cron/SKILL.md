@@ -26,7 +26,7 @@ Parameters:
 - `schedule` (required): Schedule object (see below)
 - `prompt` (required): Self-contained prompt (see below)
 - `timezone`: IANA timezone (e.g., `Asia/Tokyo`)
-- `reply`: Reply destination `{ channel: "discord"|"slack", channelId: "..." }`
+- `reply`: Delivery target for `geminiclaw_post_message` `{ channel: "discord"|"slack", channelId: "..." }`. Falls back to homeChannel if omitted.
 
 `nextRunAt` and `createdAt` are set automatically by the tool.
 
@@ -76,7 +76,7 @@ Standard 5-field cron expression. Use in combination with `timezone`.
    - Schedule: {human-readable description of schedule}
    - Prompt: {beginning or full text of prompt}
    - Timezone: {timezone}
-   - Reply to: {description of reply or "default"}
+   - Delivery target: {description of reply or "homeChannel"}
 
    Reply "OK" to proceed, or let me know if anything needs to be changed.
    ```
@@ -121,11 +121,11 @@ Criteria: Support holds + volume increasing → consider buying. No volume → p
 Registered jobs: cloudflare-check-open / cloudflare-analysis / cloudflare-final-decision
 ```
 
-## Reply Field
+## Reply Field (Delivery Target)
 
-Sends results to a Discord/Slack channel after job completion.
-**Set this to the channel ID of the conversation where the user made the request.**
-If not set, falls back to the default channel from system settings.
+Specifies where the cron job posts results via `geminiclaw_post_message`.
+**Set this to the channel ID where the user wants to receive results.**
+If not set, falls back to homeChannel.
 
 ## Notes
 

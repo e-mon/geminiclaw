@@ -12,7 +12,7 @@
         "@google/gemini-cli": "0.34.0-nightly.20260307.6c3a90645",
         "@mariozechner/pi-tui": "^0.54.2",
         "@modelcontextprotocol/sdk": "^1",
-        "@tobilu/qmd": "^1.0.7",
+        "@tobilu/qmd": "^1.1.6",
         "chalk": "^5",
         "chat": "^4.14.0",
         "commander": "^12",
@@ -42,8 +42,8 @@
     },
   },
   "patchedDependencies": {
-    "@tobilu/qmd@1.0.7": "patches/@tobilu%2Fqmd@1.0.7.patch",
     "@google/gemini-cli@0.34.0-nightly.20260307.6c3a90645": "patches/@google%2Fgemini-cli@0.34.0-nightly.20260307.6c3a90645.patch",
+    "@tobilu/qmd@1.1.6": "patches/@tobilu%2Fqmd@1.1.6.patch",
   },
   "packages": {
     "@acemir/cssom": ["@acemir/cssom@0.9.31", "", {}, "sha512-ZnR3GSaH+/vJ0YlHau21FjfLYjMpYVIzTD8M8vIEQvIGxeOXyXdzCI140rrCY862p/C/BbzWsjc1dgnM9mkoTA=="],
@@ -530,7 +530,7 @@
 
     "@tinyhttp/content-disposition": ["@tinyhttp/content-disposition@2.2.4", "", {}, "sha512-5Kc5CM2Ysn3vTTArBs2vESUt0AQiWZA86yc1TI3B+lxXmtEq133C1nxXNOgnzhrivdPZIh3zLj5gDnZjoLL5GA=="],
 
-    "@tobilu/qmd": ["@tobilu/qmd@1.0.7", "", { "dependencies": { "@modelcontextprotocol/sdk": "^1.25.1", "better-sqlite3": "^11.0.0", "fast-glob": "^3.3.0", "node-llama-cpp": "^3.14.5", "picomatch": "^4.0.0", "sqlite-vec": "^0.1.7-alpha.2", "yaml": "^2.8.2", "zod": "^4.2.1" }, "optionalDependencies": { "sqlite-vec-darwin-arm64": "^0.1.7-alpha.2", "sqlite-vec-darwin-x64": "^0.1.7-alpha.2", "sqlite-vec-linux-x64": "^0.1.7-alpha.2", "sqlite-vec-win32-x64": "^0.1.7-alpha.2" }, "peerDependencies": { "typescript": "^5.9.3" }, "bin": { "qmd": "qmd" } }, "sha512-80PnqmowNe3bfMy3EXJMY6JYdD2Ak1iQCXppbgO8x28Wufrsz65yc/5lBrigW5ThEtPRYIdwSEQTFTIY+v1pKA=="],
+    "@tobilu/qmd": ["@tobilu/qmd@1.1.6", "", { "dependencies": { "@modelcontextprotocol/sdk": "^1.25.1", "better-sqlite3": "^11.0.0", "fast-glob": "^3.3.0", "node-llama-cpp": "^3.17.1", "picomatch": "^4.0.0", "sqlite-vec": "^0.1.7-alpha.2", "yaml": "^2.8.2", "zod": "^4.2.1" }, "optionalDependencies": { "sqlite-vec-darwin-arm64": "^0.1.7-alpha.2", "sqlite-vec-darwin-x64": "^0.1.7-alpha.2", "sqlite-vec-linux-arm64": "^0.1.7-alpha.2", "sqlite-vec-linux-x64": "^0.1.7-alpha.2", "sqlite-vec-windows-x64": "^0.1.7-alpha.2" }, "peerDependencies": { "typescript": "^5.9.3" }, "bin": { "qmd": "dist/qmd.js" } }, "sha512-euhQuXxr2Fgdmuhbsxtrwcodkwhnsfzk6alsoitt2QX2BZHs/+2GgkTKW7X3akE2SK7BGtcIuMZeAa95CEBlnA=="],
 
     "@traceloop/ai-semantic-conventions": ["@traceloop/ai-semantic-conventions@0.20.0", "", { "dependencies": { "@opentelemetry/api": "^1.9.0" } }, "sha512-bvivhZU6U8TW4TKktYnjdTi+7GE4WxI8epaGjawalSKDunmxaA+4UVFQ+4tSCBvp2Scby+gnYNaTZSrtABfOlQ=="],
 
@@ -1633,8 +1633,6 @@
     "@opentelemetry/sdk-trace-node/@opentelemetry/core": ["@opentelemetry/core@2.5.1", "", { "dependencies": { "@opentelemetry/semantic-conventions": "^1.29.0" }, "peerDependencies": { "@opentelemetry/api": ">=1.0.0 <1.10.0" } }, "sha512-Dwlc+3HAZqpgTYq0MUyZABjFkcrKTePwuiFVLjahGD8cx3enqihmpAmdgNFO1R4m/sIe5afjJrA25Prqy4NXlA=="],
 
     "@opentelemetry/sql-common/@opentelemetry/core": ["@opentelemetry/core@2.5.1", "", { "dependencies": { "@opentelemetry/semantic-conventions": "^1.29.0" }, "peerDependencies": { "@opentelemetry/api": ">=1.0.0 <1.10.0" } }, "sha512-Dwlc+3HAZqpgTYq0MUyZABjFkcrKTePwuiFVLjahGD8cx3enqihmpAmdgNFO1R4m/sIe5afjJrA25Prqy4NXlA=="],
-
-    "@tobilu/qmd/sqlite-vec-win32-x64": ["sqlite-vec-win32-x64@file:node_modules/@tobilu/qmd/node_modules/sqlite-vec-win32-x64", {}],
 
     "@tobilu/qmd/zod": ["zod@4.3.6", "", {}, "sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg=="],
 

@@ -1,8 +1,8 @@
 diff --git a/dist/llm.js b/dist/llm.js
-index 6e9fa7dc6c7590ac28184196b88d391365aca433..7297b7ba616862c5536f585198cd1cf81abdf3ce 100644
+index b304389c0bc299477cd887c6f73c3266e2f1c8b6..bc91c1b94c3840c07af65edc9b36216775654739 100644
 --- a/dist/llm.js
 +++ b/dist/llm.js
-@@ -461,7 +461,7 @@ export class LlamaCpp {
+@@ -485,7 +485,7 @@ export class LlamaCpp {
      // Qwen3 reranker template adds ~200 tokens overhead (system prompt, tags, etc.)
      // Chunks are max 800 tokens, so 800 + 200 + query ≈ 1100 tokens typical.
      // Use 2048 for safety margin. Still 17× less than auto (40960).
@@ -24,10 +24,10 @@ index fd430fa49ba2785151289337c2c02d830a7f1b68..67519ba8fc86386be0ca1bbe5a7e018b
  export type HttpServerHandle = {
      httpServer: import("http").Server;
 diff --git a/dist/mcp.js b/dist/mcp.js
-index 7484edf93601d273b4b504679518274a777b37f7..efe7081d2ddcd72b5c22c7ce8573a877dc9dc44b 100644
+index d1b09687ae86c1f22c245091ed7391879057f7c1..29946f0f109449d7d36e071b46cfdfbf01e48980 100644
 --- a/dist/mcp.js
 +++ b/dist/mcp.js
-@@ -100,7 +100,7 @@ function buildInstructions(store) {
+@@ -108,7 +108,7 @@ function buildInstructions(store) {
   * Create an MCP server with all QMD tools, resources, and prompts registered.
   * Shared by both stdio and HTTP transports.
   */

@@ -30,27 +30,17 @@ const log = createLogger('cron-scheduler');
 
 // ── Shared helpers ───────────────────────────────────────────────
 
-/** Resolve the reply destination for a cron job (job → config → homeChannel). */
-function buildCronReply(
-    job: CronJob,
-    config: ReturnType<typeof loadConfig>,
-): { channelType: string; channelId: string; replyRef?: string } | undefined {
-    const source = job.reply ?? config.cron.defaultReply ?? resolveHomeChannel(config);
-    if (!source) return undefined;
-    return {
-        channelType: source.channel,
-        channelId: source.channelId,
-        replyRef: ('threadTs' in source ? source.threadTs : undefined) as string | undefined,
-    };
-}
-
-function resolveHomeChannel(config: ReturnType<typeof loadConfig>): CronJob['reply'] | undefined {
-    if (config.channels.discord.enabled && config.channels.discord.homeChannel) {
-        return { channel: 'discord', channelId: config.channels.discord.homeChannel };
-    }
-    if (config.channels.slack.enabled && config.channels.slack.homeChannel) {
-        return { channel: 'slack', channelId: config.channels.slack.homeChannel };
-    }
+/**
+ * Build a `platform:channelId` delivery target string for context injection.
+ * The agent uses this to know where to post results via `geminiclaw_post_message`.
+ * Falls back to homeChannel when the job has no explicit reply.
+ */
+function buildDeliveryTarget(job: CronJob, config: ReturnType<typeof loadConfig>): string | undefined {
+    if (job.reply) return `${job.reply.channel}:${job.reply.channelId}`;
+    const dc = config.channels.discord;
+    if (dc.enabled && dc.homeChannel) return `discord:${dc.homeChannel}`;
+    const sc = config.channels.slack;
+    if (sc.enabled && sc.homeChannel) return `slack:${sc.homeChannel}`;
     return undefined;
 }
 
@@ -100,7 +90,7 @@ export const cronJobRunner = inngest.createFunction(
                 trigger: 'cron',
                 prompt: job.prompt,
                 model: job.model,
-                reply: buildCronReply(job, config),
+                deliveryTarget: buildDeliveryTarget(job, config),
             },
         });
         log.info('dispatched', { jobId: job.id, jobName: job.name, model: job.model });
@@ -209,7 +199,7 @@ export async function fireCronJob(
             trigger: 'cron',
             prompt: job.prompt,
             model: job.model,
-            reply: buildCronReply(job, config),
+            deliveryTarget: buildDeliveryTarget(job, config),
         },
     });
     appendRunLog(workspacePath, job.id, {

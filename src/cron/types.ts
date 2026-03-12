@@ -17,12 +17,10 @@ export interface CronJob {
     model?: string;
     /** Auto-delete job from jobs.json after successful run. Default: true for `at`, false otherwise. */
     deleteAfterRun?: boolean;
-    /** Passed to agent-run's reply field for channel responses. */
+    /** Delivery target for geminiclaw_post_message. Falls back to homeChannel if omitted. */
     reply?: {
         channel: 'discord' | 'slack';
         channelId: string;
-        messageId?: string;
-        threadTs?: string;
     };
     createdAt: string;
     lastRunAt?: string;

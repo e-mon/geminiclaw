@@ -51,7 +51,9 @@ const TOOLS = [
                 },
                 reply: {
                     type: 'object',
-                    description: 'Reply destination: { channel: "discord"|"slack", channelId: "..." }. Optional.',
+                    description:
+                        'Delivery target for geminiclaw_post_message: { channel: "discord"|"slack", channelId: "..." }. ' +
+                        'Falls back to homeChannel if omitted.',
                 },
                 model: {
                     type: 'string',
@@ -151,7 +153,7 @@ function formatJobSummary(job: CronJob): string {
         `タイムゾーン: ${job.timezone ?? '(デフォルト)'}`,
         `モデル: ${job.model ?? '(デフォルト)'}`,
         `次回実行: ${job.nextRunAt ?? '(未設定)'}`,
-        `返信先: ${job.reply ? `${job.reply.channel} (${job.reply.channelId})` : '(デフォルト)'}`,
+        `配信先: ${job.reply ? `${job.reply.channel}:${job.reply.channelId}` : '(homeChannel)'}`,
         `自動削除: ${job.deleteAfterRun != null ? (job.deleteAfterRun ? 'はい' : 'いいえ') : '(デフォルト)'}`,
         `有効: ${job.enabled ? 'はい' : 'いいえ'}`,
     ];

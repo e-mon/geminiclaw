@@ -57,7 +57,13 @@ export async function createServer(port: number = 3000) {
     // QMD MCP — embedded in-process (no separate daemon or proxy).
     // Store is shared across requests; McpServer is created per-request
     // because the SDK only allows one transport per server instance.
+    // QMD internal modules aren't in the package exports map — use dynamic import
+    // with suppressed TS directive to bypass module resolution.
+    // biome-ignore lint/suspicious/noTsIgnore: QMD dist paths not in package exports map
+    // @ts-ignore — QMD dist paths not in package exports map
     const { createStore, enableProductionMode } = await import('@tobilu/qmd/dist/store.js');
+    // biome-ignore lint/suspicious/noTsIgnore: QMD dist paths not in package exports map
+    // @ts-ignore — QMD dist paths not in package exports map
     const { createMcpServer: createQmdMcpServer } = await import('@tobilu/qmd/dist/mcp.js');
     enableProductionMode();
     const qmdStore = createStore();
@@ -364,7 +370,7 @@ export function createPreviewServer(
     previewApp.use((_req, res, next) => {
         res.setHeader(
             'Content-Security-Policy',
-            "default-src 'none'; script-src 'unsafe-inline'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline' https:; font-src 'self' https:; frame-src https:",
+            "default-src 'none'; script-src 'self' 'unsafe-inline' http: https:; img-src * data: blob:; style-src 'self' 'unsafe-inline' http: https:; font-src * data:; frame-src http: https:; media-src * data: blob:",
         );
         res.setHeader('X-Content-Type-Options', 'nosniff');
         res.setHeader('X-Frame-Options', 'DENY');

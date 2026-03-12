@@ -357,8 +357,11 @@ export class RunResultBuilder {
         // Strip <think>...</think> and <thought>...</thought> reasoning blocks before checking —
         // the HEARTBEAT_OK signal must come from the actual response, not internal reasoning.
         const responseWithoutThink = this.result.responseText.replace(/<(think|thought)>[\s\S]*?<\/\1>/g, '');
-        // HEARTBEAT_OK must appear as a standalone line, not embedded in prose.
-        this.result.heartbeatOk = /^\s*HEARTBEAT_OK\s*$/m.test(responseWithoutThink);
+        // Detect HEARTBEAT_OK: strip markdown decoration, then match at end of any line.
+        // LLMs sometimes append the token without a preceding newline or wrap it in
+        // bold/code markers — normalising these avoids false negatives (à la OpenClaw).
+        const normalized = responseWithoutThink.replace(/[*`~]/g, '');
+        this.result.heartbeatOk = /HEARTBEAT_OK\s*$/m.test(normalized);
 
         // Safety net: if extractPendingSkillActivation() was never called by the caller,
         // parse all skill activations from the response text now.

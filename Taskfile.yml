@@ -23,13 +23,16 @@ tasks:
     desc: First-time setup (install deps, build, link, run setup wizard)
     cmds:
       - task: check-tools
-      - bun install --force
-      - npx --yes inngest-cli@latest --version
+      - cmd: bun install --force
+        silent: true
+      - cmd: npx --yes inngest-cli@latest --version
+        silent: true
       - task: install
       - geminiclaw setup
 
   install:
     desc: Build and install geminiclaw globally (bun link)
+    silent: true
     sources:
       - src/**/*.ts
       - templates/**/*
@@ -44,10 +47,11 @@ tasks:
 
   start:
     desc: "Start all services (inngest + serve). Use -d for daemon: task start -- -d"
+    silent: true
     cmds:
       - task: install
-      - rm -f .overmind.sock
-      - find /tmp/tmux-$(id -u)/ -name "overmind-geminiclaw-*" -type s -delete 2>/dev/null || true
+      - cmd: rm -f .overmind.sock
+      - cmd: find /tmp/tmux-$(id -u)/ -name "overmind-geminiclaw-*" -type s -delete 2>/dev/null || true
       - |
         if echo "{{.CLI_ARGS}}" | grep -q -- '-d'; then
           overmind start -D
@@ -61,12 +65,15 @@ tasks:
 
   stop:
     desc: Stop all services (gracefully quit overmind daemon)
+    silent: true
     cmd: overmind quit
 
   status:
     desc: Show service status
+    silent: true
     cmd: overmind status
 
   logs:
     desc: Tail all service logs (Ctrl-C to quit)
+    silent: true
     cmd: overmind echo

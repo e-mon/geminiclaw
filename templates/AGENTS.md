@@ -30,9 +30,7 @@ When you learn a lesson or make a mistake, document it so future-you doesn't rep
 
 ### Searching Memory
 
-- `qmd_search` — BM25 keyword search across memory files
-- `qmd_vector_search` — semantic search (finds related content even with different wording)
-- `qmd_deep_search` — highest precision (auto-expands query + reranks all results)
+- `qmd_query` — hybrid search (BM25 + vector + reranking, supports `intent` parameter for disambiguation)
 - `qmd_get` — read full document content by path or docid from search results
 
 ## Time

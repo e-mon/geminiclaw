@@ -153,26 +153,6 @@ export async function deliverReply(opts: {
         log.info('reply sent via Chat SDK', { totalMs: Date.now() - t0, postMs: Date.now() - tChatDone });
         return;
     }
-
-    // Legacy path: use postToChannel for cron/heartbeat replies
-    const { reply } = eventData;
-    if (!reply) return;
-
-    log.info('sending reply (legacy)', {
-        channelType: reply.channelType,
-        channelId: reply.channelId,
-        chars: replyText.length,
-        mediaItems: mediaItems.length,
-    });
-
-    await postToChannel({
-        channelType: reply.channelType as 'discord' | 'slack',
-        channelId: reply.channelId,
-        threadRef: reply.replyRef,
-        text: replyText,
-        files: mediaItems,
-        config,
-    });
 }
 
 /**

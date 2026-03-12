@@ -127,7 +127,6 @@ Schedule: { "type": "every", "intervalMin": 360 }
 Timezone: [user's timezone from config]
 Prompt: "Run the topic-patrol skill."
 Model: flash
-Reply: { "channel": "discord", "channelId": "[homeChannel]" }
 ```
 
 ## Graceful Degradation

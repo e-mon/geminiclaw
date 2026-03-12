@@ -23,10 +23,7 @@ function isBackgroundJob(ctx: DeliverContext): boolean {
 }
 
 function hasReplyTarget(ctx: DeliverContext): boolean {
-    if (!ctx.eventData.serializedThread && !ctx.eventData.reply) return false;
-    // Heartbeat OK doesn't need a reply — execution log channel is sufficient
-    if (ctx.eventData.trigger === 'heartbeat' && ctx.runResult.heartbeatOk) return false;
-    return true;
+    return !!ctx.eventData.serializedThread;
 }
 
 async function generateTitle(ctx: DeliverContext): Promise<void> {

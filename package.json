@@ -39,7 +39,7 @@
     "@google/gemini-cli": "0.34.0-nightly.20260307.6c3a90645",
     "@mariozechner/pi-tui": "^0.54.2",
     "@modelcontextprotocol/sdk": "^1",
-    "@tobilu/qmd": "^1.0.7",
+    "@tobilu/qmd": "^1.1.6",
     "chalk": "^5",
     "chat": "^4.14.0",
     "commander": "^12",
@@ -77,7 +77,7 @@
     "templates/"
   ],
   "patchedDependencies": {
-    "@tobilu/qmd@1.0.7": "patches/@tobilu%2Fqmd@1.0.7.patch",
+    "@tobilu/qmd@1.1.6": "patches/@tobilu%2Fqmd@1.1.6.patch",
     "@google/gemini-cli@0.34.0-nightly.20260307.6c3a90645": "patches/@google%2Fgemini-cli@0.34.0-nightly.20260307.6c3a90645.patch"
   }
 }
