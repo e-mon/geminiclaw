@@ -71,6 +71,20 @@ export const ConfigSchema = z.object({
      * Set to 0 to disable session resumption entirely.
      */
     sessionIdleMinutes: z.number().min(0).default(60),
+    /** Primary channel for the agent. Bootstrap greetings, heartbeat and cron results are sent here. */
+    home: z
+        .object({
+            channel: z.enum(['discord', 'slack', 'telegram']),
+            channelId: z.string(),
+        })
+        .optional(),
+    /** Channel for background job notifications (heartbeat alerts, cron completion). */
+    notifications: z
+        .object({
+            channel: z.enum(['discord', 'slack', 'telegram']),
+            channelId: z.string(),
+        })
+        .optional(),
     /** Heartbeat-specific settings. */
     heartbeat: z
         .object({
@@ -81,55 +95,10 @@ export const ConfigSchema = z.object({
              * Falls back to the global `model` setting when omitted.
              */
             model: z.string().default('flash'),
-            /**
-             * Heartbeat notification destinations.
-             * Channel notifications receive every run result (execution logs).
-             * Desktop notifications only fire on alerts (response is NOT HEARTBEAT_OK).
-             */
-            notifications: z
-                .object({
-                    /** macOS/Linux desktop notification. Enabled by default so alerts are never silent. */
-                    desktop: z.boolean().default(true),
-                    /** Post heartbeat alerts to a Discord channel. */
-                    discord: z
-                        .object({
-                            enabled: z.boolean().default(false),
-                            channelId: z.string().optional(),
-                        })
-                        .default({}),
-                    /** Post heartbeat alerts to a Slack channel. */
-                    slack: z
-                        .object({
-                            enabled: z.boolean().default(false),
-                            channelId: z.string().optional(),
-                        })
-                        .default({}),
-                })
-                .default({}),
+            /** macOS/Linux desktop notification for heartbeat alerts. Enabled by default so alerts are never silent. */
+            desktop: z.boolean().default(true),
         })
         .default({}),
-    /**
-     * Unified home channel for bootstrap greetings, heartbeat results, and cron fallback.
-     * Format: { channel: 'discord' | 'slack' | 'telegram', channelId: string }
-     */
-    home: z
-        .object({
-            channel: z.string(),
-            channelId: z.string(),
-        })
-        .optional(),
-    /**
-     * Notification destination for background job completion/failure notices.
-     * Optional — when unset, no channel notifications are sent (desktop-only if enabled).
-     * Format: { channel: 'discord' | 'slack' | 'telegram', channelId: string }
-     */
-    notifications: z
-        .object({
-            channel: z.string(),
-            channelId: z.string(),
-        })
-        .optional()
-        .catch(undefined),
     channels: z
         .object({
             discord: z
@@ -146,8 +115,15 @@ export const ConfigSchema = z.object({
                 .default({}),
             telegram: z
                 .object({
-                    enabled: z.boolean().default(false),
                     botToken: z.string().optional(),
+                    enabled: z.boolean().default(false),
+                    mode: z.enum(['auto', 'webhook', 'polling']).default('auto'),
+                    /**
+                     * Chat IDs where the bot responds to all messages without requiring @mention.
+                     * home.channelId is automatically included at runtime when home.channel is 'telegram'.
+                     * Can be updated by the agent via {workspace}/config.json.
+                     */
+                    respondInChannels: z.array(z.string()).default([]),
                 })
                 .default({}),
             slack: z
@@ -274,6 +250,12 @@ export const WorkspaceConfigSchema = z.object({
     slack: z
         .object({
             /** Channel IDs where the bot responds without @mention. */
+            respondInChannels: z.array(z.string()).optional(),
+        })
+        .optional(),
+    telegram: z
+        .object({
+            /** Chat IDs where the bot responds without @mention. */
             respondInChannels: z.array(z.string()).optional(),
         })
         .optional(),

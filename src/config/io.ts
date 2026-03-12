@@ -23,6 +23,11 @@ import { type Config, ConfigSchema, WORKSPACE_CONFIG_FILENAME, WorkspaceConfigSc
  *   SLACK_BOT_TOKEN                  → channels.slack.token
  *   SLACK_SIGNING_SECRET             → channels.slack.signingSecret
  *
+ * Legacy migration (pre-Zod parse):
+ *   - Old `notifications: { enabled, method }` → stripped (new format: `{ channel, channelId }`)
+ *   - Old `channels.*.homeChannel` → `home: { channel, channelId }`
+ *   - Old `heartbeat.notifications.*.{ enabled, channelId }` → `notifications: { channel, channelId }`
+ *
  * Vault usage: call `await vault.init()` before `loadConfig()` to enable resolution.
  * If vault is not initialized, $vault: references are left as-is (undefined after parse).
  */
@@ -33,6 +38,49 @@ export function loadConfig(configPath: string = CONFIG_PATH): Config {
             json = JSON.parse(readFileSync(configPath, 'utf-8'));
         } catch (err) {
             process.stderr.write(`[geminiclaw] warning: failed to parse ${configPath}: ${String(err)}\n`);
+        }
+    }
+
+    // Migrate legacy config formats before Zod parse
+    if (typeof json === 'object' && json !== null) {
+        const obj = json as Record<string, unknown>;
+
+        // Strip legacy top-level `notifications` (old format: { enabled, method }) that
+        // conflicts with the new `{ channel, channelId }` schema.
+        const notif = obj.notifications;
+        if (notif && typeof notif === 'object' && notif !== null && !('channel' in notif)) {
+            delete obj.notifications;
+        }
+
+        // Migrate legacy per-platform homeChannel → top-level `home`.
+        // Picks the first enabled platform with a homeChannel set.
+        if (!obj.home) {
+            const channels = obj.channels as Record<string, Record<string, unknown>> | undefined;
+            if (channels) {
+                for (const platform of ['discord', 'slack', 'telegram'] as const) {
+                    const ch = channels[platform];
+                    if (ch?.enabled && typeof ch.homeChannel === 'string' && ch.homeChannel) {
+                        obj.home = { channel: platform, channelId: ch.homeChannel };
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Migrate legacy heartbeat.notifications → top-level `notifications`.
+        // Picks the first enabled platform notification channel.
+        if (!obj.notifications) {
+            const hb = obj.heartbeat as Record<string, unknown> | undefined;
+            const hbNotif = hb?.notifications as Record<string, Record<string, unknown>> | undefined;
+            if (hbNotif) {
+                for (const platform of ['discord', 'slack', 'telegram'] as const) {
+                    const ch = hbNotif[platform];
+                    if (ch?.enabled && typeof ch.channelId === 'string' && ch.channelId) {
+                        obj.notifications = { channel: platform, channelId: ch.channelId };
+                        break;
+                    }
+                }
+            }
         }
     }
 
@@ -64,6 +112,9 @@ export function loadConfig(configPath: string = CONFIG_PATH): Config {
             if (ws.slack?.respondInChannels !== undefined) {
                 config.channels.slack.respondInChannels = ws.slack.respondInChannels;
             }
+            if (ws.telegram?.respondInChannels !== undefined) {
+                config.channels.telegram.respondInChannels = ws.telegram.respondInChannels;
+            }
         } catch (err) {
             process.stderr.write(
                 `[geminiclaw] warning: failed to parse workspace config ${wsConfigPath}: ${String(err)}\n`,
@@ -71,14 +122,12 @@ export function loadConfig(configPath: string = CONFIG_PATH): Config {
         }
     }
 
-    // Merge home channel into respondInChannels (deduplicated)
+    // Merge home channel into its platform's respondInChannels (deduplicated)
     if (config.home) {
         const { channel, channelId } = config.home;
-        if (channel === 'discord' && !config.channels.discord.respondInChannels.includes(channelId)) {
-            config.channels.discord.respondInChannels = [channelId, ...config.channels.discord.respondInChannels];
-        }
-        if (channel === 'slack' && !config.channels.slack.respondInChannels.includes(channelId)) {
-            config.channels.slack.respondInChannels = [channelId, ...config.channels.slack.respondInChannels];
+        const platformConfig = config.channels[channel];
+        if (platformConfig && !platformConfig.respondInChannels.includes(channelId)) {
+            platformConfig.respondInChannels = [channelId, ...platformConfig.respondInChannels];
         }
     }
 

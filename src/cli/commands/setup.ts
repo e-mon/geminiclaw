@@ -587,69 +587,51 @@ async function stepHeartbeatNotifications(): Promise<void> {
         'Job Notifications',
     );
 
-    const raw: Record<string, unknown> = existsSync(CONFIG_PATH)
-        ? (JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')) as Record<string, unknown>)
-        : {};
+    // Collect all enabled platform channels for notification target selection
+    const allOptions: { value: string; label: string }[] = [];
 
-    if (!raw.heartbeat) raw.heartbeat = {};
-    const hb = raw.heartbeat as Record<string, unknown>;
-    if (!hb.notifications) hb.notifications = {};
-    const notif = hb.notifications as Record<string, unknown>;
-
-    let hasChanges = false;
-
-    // --- Discord ---
     if (config.channels.discord.enabled && config.channels.discord.token) {
         const s = p.spinner();
         s.start('Fetching Discord channels...');
         const channels = await fetchDiscordChannels(config.channels.discord.token);
         s.stop('Discord channels loaded.');
-
-        const options = toChannelOptions(channels);
-
-        if (options.length > 0) {
-            const selected = await p.select({
-                message: 'Notification channel for background jobs (heartbeat & cron)?',
-                options: [{ value: '__skip__', label: 'Skip', hint: 'Do not send to Discord' }, ...options],
-            });
-            exitIfCancelled(selected);
-
-            if (selected !== '__skip__') {
-                notif.discord = { enabled: true, channelId: selected };
-                hasChanges = true;
-                const label = options.find((o) => o.value === selected);
-                p.log.success(`Job notifications → Discord ${label?.label ?? selected}`);
-            }
-        } else {
-            p.log.warn('No text channels found in Discord. Skipping.');
+        for (const ch of toChannelOptions(channels)) {
+            allOptions.push({ value: `discord:${ch.value}`, label: `Discord ${ch.label}` });
         }
     }
 
-    // --- Slack ---
     if (config.channels.slack.enabled && config.channels.slack.token) {
         const s = p.spinner();
         s.start('Fetching Slack channels...');
         const channels = await fetchSlackChannels(config.channels.slack.token);
         s.stop('Slack channels loaded.');
-
-        const options = toChannelOptions(channels);
-
-        if (options.length > 0) {
-            const selected = await p.select({
-                message: 'Notification channel for background jobs (heartbeat & cron)?',
-                options: [{ value: '__skip__', label: 'Skip', hint: 'Do not send to Slack' }, ...options],
-            });
-            exitIfCancelled(selected);
-
-            if (selected !== '__skip__') {
-                notif.slack = { enabled: true, channelId: selected };
-                hasChanges = true;
-                const label = options.find((o) => o.value === selected);
-                p.log.success(`Job notifications → Slack ${label?.label ?? selected}`);
-            }
-        } else {
-            p.log.warn('No channels found in Slack. Skipping.');
+        for (const ch of toChannelOptions(channels)) {
+            allOptions.push({ value: `slack:${ch.value}`, label: `Slack ${ch.label}` });
         }
+    }
+
+    if (config.channels.telegram.enabled && config.channels.telegram.botToken) {
+        const telegramChats = await fetchTelegramChats(config.channels.telegram.botToken);
+        for (const ch of telegramChats) {
+            allOptions.push({ value: `telegram:${ch.id}`, label: `Telegram ${ch.name}` });
+        }
+    }
+
+    if (allOptions.length > 0) {
+        const selected = await p.select({
+            message: 'Notification channel for background jobs (heartbeat & cron)?',
+            options: [{ value: '__skip__', label: 'Skip', hint: 'No channel notifications' }, ...allOptions],
+        });
+        exitIfCancelled(selected);
+
+        if (selected !== '__skip__') {
+            const parsed = parseHomeValue(selected as string);
+            patchConfigFile({ notifications: parsed });
+            const label = allOptions.find((o) => o.value === selected);
+            p.log.success(`Job notifications → ${label?.label ?? selected}`);
+        }
+    } else {
+        p.log.warn('No channels available. Skipping channel notifications.');
     }
 
     // --- Desktop ---
@@ -658,17 +640,7 @@ async function stepHeartbeatNotifications(): Promise<void> {
         initialValue: true,
     });
     exitIfCancelled(enableDesktop);
-    notif.desktop = enableDesktop;
-    hasChanges = true;
-
-    if (hasChanges) {
-        const dir = CONFIG_PATH.replace(/[/\\][^/\\]+$/, '');
-        if (!existsSync(dir)) {
-            const { mkdirSync } = await import('node:fs');
-            mkdirSync(dir, { recursive: true, mode: 0o700 });
-        }
-        writeFileSync(CONFIG_PATH, `${JSON.stringify(raw, null, 2)}\n`, { encoding: 'utf-8', mode: 0o600 });
-    }
+    patchConfigFile({ heartbeat: { desktop: enableDesktop } });
 
     if (enableDesktop) {
         p.log.success('Desktop notifications: enabled');
@@ -694,13 +666,12 @@ function printSummary(config: Config, workspacePath: string): void {
 
     const check = (ok: boolean): string => (ok ? '\x1b[32m✔\x1b[0m' : '\x1b[2m—\x1b[0m');
 
-    // Build job notification summary (heartbeat + cron)
+    // Build job notification summary
     const notifParts: string[] = [];
-    if (config.heartbeat.notifications.desktop) notifParts.push('desktop (alerts)');
-    if (config.heartbeat.notifications.discord.enabled && config.heartbeat.notifications.discord.channelId)
-        notifParts.push(`Discord #${config.heartbeat.notifications.discord.channelId}`);
-    if (config.heartbeat.notifications.slack.enabled && config.heartbeat.notifications.slack.channelId)
-        notifParts.push(`Slack #${config.heartbeat.notifications.slack.channelId}`);
+    if (config.heartbeat.desktop) notifParts.push('desktop (alerts)');
+    if (config.notifications) {
+        notifParts.push(`${config.notifications.channel} #${config.notifications.channelId}`);
+    }
     const notifSummary = notifParts.length > 0 ? notifParts.join(' + ') : 'none';
 
     // Home summary

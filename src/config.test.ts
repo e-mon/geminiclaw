@@ -18,9 +18,7 @@ describe('ConfigSchema', () => {
         expect(config.heartbeatIntervalMin).toBe(30);
         expect(config.channels.discord.enabled).toBe(false);
         expect(config.channels.slack.enabled).toBe(false);
-        expect(config.heartbeat.notifications.desktop).toBe(true);
-        expect(config.heartbeat.notifications.discord.enabled).toBe(false);
-        expect(config.heartbeat.notifications.slack.enabled).toBe(false);
+        expect(config.heartbeat.desktop).toBe(true);
     });
 
     it('overrides defaults with provided values', () => {

@@ -3,7 +3,7 @@
  *
  * All handlers are fail-open with conditional execution:
  * - generateTitle: first turn only
- * - notifyBackgroundJob: heartbeat + cron → heartbeat.notifications channel
+ * - notifyBackgroundJob: heartbeat + cron → notifications channel
  * - sendReply: when a reply target exists (skipped for heartbeat OK)
  */
 
@@ -50,13 +50,12 @@ async function generateTitle(ctx: DeliverContext): Promise<void> {
 
 /**
  * Post a brief completion notification for background jobs (heartbeat / cron)
- * to the heartbeat.notifications channel. This is separate from the full
+ * to the notifications channel. This is separate from the full
  * result reply which goes to the job's own reply channel.
  *
  * Desktop notifications only fire on heartbeat alerts.
  */
 async function notifyBackgroundJob(ctx: DeliverContext): Promise<void> {
-    const notif = ctx.config.heartbeat.notifications;
     const trigger = ctx.eventData.trigger;
     const promises: Promise<void>[] = [];
 
@@ -65,7 +64,7 @@ async function notifyBackgroundJob(ctx: DeliverContext): Promise<void> {
         const isAlert = !ctx.runResult.heartbeatOk;
         const filtered = filterResponseText(ctx.runResult.responseText);
         text = isAlert ? `\u26a0\ufe0f **Heartbeat Alert**\n${filtered.substring(0, 500)}` : '\u2705 **Heartbeat OK**';
-        if (isAlert && notif.desktop) {
+        if (isAlert && ctx.config.heartbeat.desktop) {
             promises.push(sendDesktopNotification('GeminiClaw \u26a0\ufe0f', filtered.substring(0, 300)));
         }
     } else {
@@ -76,39 +75,18 @@ async function notifyBackgroundJob(ctx: DeliverContext): Promise<void> {
             : `\u2705 **Cron done: ${jobId}**`;
     }
 
-    if (notif.discord.enabled && notif.discord.channelId) {
+    if (ctx.config.notifications) {
         promises.push(
             postToChannel({
-                channelType: 'discord',
-                channelId: notif.discord.channelId,
+                channelType: ctx.config.notifications.channel,
+                channelId: ctx.config.notifications.channelId,
                 text,
                 config: ctx.config,
             }).catch((err) => {
-                log.warn('job notification failed', { channelType: 'discord', error: String(err) });
-            }),
-        );
-    }
-    if (notif.slack.enabled && notif.slack.channelId) {
-        promises.push(
-            postToChannel({ channelType: 'slack', channelId: notif.slack.channelId, text, config: ctx.config }).catch(
-                (err) => {
-                    log.warn('job notification failed', { channelType: 'slack', error: String(err) });
-                },
-            ),
-        );
-    }
-
-    // Unified notifications channel (config.notifications)
-    const unified = ctx.config.notifications;
-    if (unified) {
-        promises.push(
-            postToChannel({
-                channelType: unified.channel as 'discord' | 'slack' | 'telegram',
-                channelId: unified.channelId,
-                text,
-                config: ctx.config,
-            }).catch((err) => {
-                log.warn('job notification failed', { channelType: unified.channel, error: String(err) });
+                log.warn('job notification failed', {
+                    channelType: ctx.config.notifications!.channel,
+                    error: String(err),
+                });
             }),
         );
     }

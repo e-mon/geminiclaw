@@ -502,29 +502,33 @@ export function registerHandlers(chat: Chat): void {
         const logText = `**Agent asked:** ${pending.question}\n\n**${userName}** selected: ${answer}`;
 
         try {
-            const adapterName = event.thread.adapter.name;
-            if (adapterName === 'discord') {
-                // Discord: clear embeds + components (buttons) via REST API
-                const rawChannelId = extractDiscordMessageChannelId(event.threadId);
-                const botToken = (event.thread.adapter as unknown as { botToken: string }).botToken;
-                await fetch(`https://discord.com/api/v10/channels/${rawChannelId}/messages/${event.messageId}`, {
-                    method: 'PATCH',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        Authorization: `Bot ${botToken}`,
-                    },
-                    body: JSON.stringify({ content: logText, embeds: [], components: [] }),
-                });
-            } else if (adapterName === 'slack') {
-                // Slack: clear blocks (buttons) via REST API so they can't be re-clicked
-                await editSlackMessage(event.thread, event.messageId, logText);
+            if (!event.thread) {
+                log.warn('event.thread is null, cannot edit card');
             } else {
-                await event.thread.adapter.editMessage(event.threadId, event.messageId, logText);
+                const adapterName = event.thread.adapter.name;
+                if (adapterName === 'discord') {
+                    // Discord: clear embeds + components (buttons) via REST API
+                    const rawChannelId = extractDiscordMessageChannelId(event.threadId);
+                    const botToken = (event.thread.adapter as unknown as { botToken: string }).botToken;
+                    await fetch(`https://discord.com/api/v10/channels/${rawChannelId}/messages/${event.messageId}`, {
+                        method: 'PATCH',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            Authorization: `Bot ${botToken}`,
+                        },
+                        body: JSON.stringify({ content: logText, embeds: [], components: [] }),
+                    });
+                } else if (adapterName === 'slack') {
+                    // Slack: clear blocks (buttons) via REST API so they can't be re-clicked
+                    await editSlackMessage(event.thread, event.messageId, logText);
+                } else {
+                    await event.thread.adapter.editMessage(event.threadId, event.messageId, logText);
+                }
             }
         } catch (err) {
             log.warn('failed to edit card into Q&A log, falling back to post', { error: String(err) });
             try {
-                await event.thread.post(`**${userName}** selected: ${answer}`);
+                await event.thread?.post(`**${userName}** selected: ${answer}`);
             } catch (postErr) {
                 log.warn('failed to post action confirmation', { error: String(postErr) });
             }
