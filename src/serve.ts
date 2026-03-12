@@ -6,7 +6,6 @@
  */
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import express from 'express';
@@ -58,18 +57,12 @@ export async function createServer(port: number = 3000) {
     // QMD MCP — embedded in-process (no separate daemon or proxy).
     // Store is shared across requests; McpServer is created per-request
     // because the SDK only allows one transport per server instance.
-    // QMD internal modules aren't in the package exports map, so use createRequire
-    // to bypass TypeScript's module resolution and access dist/ files directly.
-    const qmdRequire = createRequire(import.meta.url);
-    const qmdStore$ = qmdRequire('@tobilu/qmd/dist/store.js') as {
-        createStore: (dbPath?: string) => { getStatus: () => { totalDocuments: number } };
-        enableProductionMode: () => void;
-    };
-    const qmdMcp$ = qmdRequire('@tobilu/qmd/dist/mcp.js') as {
-        createMcpServer: (store: unknown) => import('@modelcontextprotocol/sdk/server/mcp.js').McpServer;
-    };
-    const { createStore, enableProductionMode } = qmdStore$;
-    const createQmdMcpServer = qmdMcp$.createMcpServer;
+    // QMD internal modules aren't in the package exports map — use dynamic import
+    // with @ts-expect-error to bypass TS module resolution.
+    // @ts-expect-error — QMD dist paths not in package exports map
+    const { createStore, enableProductionMode } = await import('@tobilu/qmd/dist/store.js');
+    // @ts-expect-error — QMD dist paths not in package exports map
+    const { createMcpServer: createQmdMcpServer } = await import('@tobilu/qmd/dist/mcp.js');
     enableProductionMode();
     const qmdStore = createStore();
     app.all('/api/mcp/qmd', async (req, res) => {
