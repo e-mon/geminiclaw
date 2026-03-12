@@ -23,8 +23,7 @@ function isBackgroundJob(ctx: DeliverContext): boolean {
 }
 
 function hasReplyTarget(ctx: DeliverContext): boolean {
-    if (!ctx.eventData.serializedThread) return false;
-    return true;
+    return !!ctx.eventData.serializedThread;
 }
 
 async function generateTitle(ctx: DeliverContext): Promise<void> {

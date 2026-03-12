@@ -21,8 +21,6 @@ export interface CronJob {
     reply?: {
         channel: 'discord' | 'slack';
         channelId: string;
-        messageId?: string;
-        threadTs?: string;
     };
     createdAt: string;
     lastRunAt?: string;
