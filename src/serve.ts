@@ -58,10 +58,12 @@ export async function createServer(port: number = 3000) {
     // Store is shared across requests; McpServer is created per-request
     // because the SDK only allows one transport per server instance.
     // QMD internal modules aren't in the package exports map — use dynamic import
-    // with @ts-expect-error to bypass TS module resolution.
-    // @ts-expect-error — QMD dist paths not in package exports map
+    // with suppressed TS directive to bypass module resolution.
+    // biome-ignore lint/suspicious/noTsIgnore: QMD dist paths not in package exports map
+    // @ts-ignore — QMD dist paths not in package exports map
     const { createStore, enableProductionMode } = await import('@tobilu/qmd/dist/store.js');
-    // @ts-expect-error — QMD dist paths not in package exports map
+    // biome-ignore lint/suspicious/noTsIgnore: QMD dist paths not in package exports map
+    // @ts-ignore — QMD dist paths not in package exports map
     const { createMcpServer: createQmdMcpServer } = await import('@tobilu/qmd/dist/mcp.js');
     enableProductionMode();
     const qmdStore = createStore();
