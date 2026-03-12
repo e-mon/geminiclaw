@@ -1,5 +1,5 @@
 diff --git a/bundle/gemini.js b/bundle/gemini.js
-index ea0166058a9bacdd0311e085cb112df5d6828786..72bc2eef5d0e9879cded610e9615984904a1b9e7 100755
+index ea0166058a9bacdd0311e085cb112df5d6828786..29daac5f364b13e54276d0546426488b55903c2e 100755
 --- a/bundle/gemini.js
 +++ b/bundle/gemini.js
 @@ -424765,7 +424765,7 @@ var init_local_executor = __esm({
@@ -29,7 +29,15 @@ index ea0166058a9bacdd0311e085cb112df5d6828786..72bc2eef5d0e9879cded610e96159849
        }
      }
      let nextMessage = { role: "user", parts: parts2 };
-@@ -571191,7 +571191,7 @@ ${thought.description}`;
+@@ -571184,14 +571184,14 @@ ${thought.description}`;
+           await this.config.getGemini31Launched?.() ?? false
+         );
+         const responseStream = await chat.sendMessageStream(
+-          { model },
++          { model, isChatModel: true },
+           nextMessage?.parts ?? [],
+           promptId,
+           pendingSend.signal,
            LlmRole.MAIN
          );
          nextMessage = null;
