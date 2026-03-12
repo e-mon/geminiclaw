@@ -206,7 +206,7 @@ function migrateLegacyConfig(obj: Record<string, unknown>): boolean {
                 }
             }
         }
-        delete hb!.notifications;
+        delete hb?.notifications;
         migrated = true;
     }
 
