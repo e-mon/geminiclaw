@@ -329,7 +329,13 @@ function shouldRespondInChannel(thread: Thread): boolean {
     const config = loadConfig();
 
     const channelConfig =
-        adapterName === 'discord' ? config.channels.discord : adapterName === 'slack' ? config.channels.slack : null;
+        adapterName === 'discord'
+            ? config.channels.discord
+            : adapterName === 'slack'
+              ? config.channels.slack
+              : adapterName === 'telegram'
+                ? config.channels.telegram
+                : null;
     if (!channelConfig) return false;
 
     const { respondInChannels } = channelConfig;
@@ -448,7 +454,7 @@ export function registerHandlers(chat: Chat): void {
     });
 
     // Handle all messages matching any text in unsubscribed, non-mention contexts.
-    // Used for respondInChannels feature (respond without @mention) on Discord and Slack.
+    // Used for respondInChannels feature (respond without @mention) on Discord, Slack, and Telegram.
     chat.onNewMessage(/[\s\S]*/, async (thread, message) => {
         if (!isUserMessage(thread, message)) return;
         if (!shouldRespondInChannel(thread)) return;

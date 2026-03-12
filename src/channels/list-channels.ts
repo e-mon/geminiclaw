@@ -58,9 +58,6 @@ export async function fetchDiscordChannels(token: string): Promise<ChannelEntry[
     return results;
 }
 
-/**
- * Fetch public channels from a Slack workspace.
- */
 interface TelegramChat {
     id: number;
     type: string;

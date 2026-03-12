@@ -84,7 +84,7 @@ async function notifyBackgroundJob(ctx: DeliverContext): Promise<void> {
                 config: ctx.config,
             }).catch((err) => {
                 log.warn('job notification failed', {
-                    channelType: ctx.config.notifications!.channel,
+                    channelType: ctx.config.notifications?.channel,
                     error: String(err),
                 });
             }),
