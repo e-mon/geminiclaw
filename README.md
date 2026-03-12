@@ -62,7 +62,7 @@ curl -fsSL https://bun.sh/install | bash
 **Ubuntu / Debian / WSL2:**
 ```bash
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt-get install -y nodejs tmux
+sudo apt-get install -y nodejs tmux build-essential
 curl -fsSL https://bun.sh/install | bash
 
 # Docker Engine
