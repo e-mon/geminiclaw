@@ -40,7 +40,7 @@ const messageDeltaEvent: MessageEvent = {
 
 const toolUseEvent: ToolUseEvent = {
     type: 'tool_use',
-    tool_name: 'qmd__qmd_search',
+    tool_name: 'qmd__qmd_query',
     tool_id: 'tool-1',
     parameters: { text: 'user name is Test', category: 'user' },
     timestamp: '2026-02-22T10:00:03Z',
@@ -124,7 +124,7 @@ describe('RunResultBuilder', () => {
 
         expect(result.toolCalls).toHaveLength(1);
         expect(result.toolCalls[0].id).toBe('tool-1');
-        expect(result.toolCalls[0].name).toBe('qmd__qmd_search');
+        expect(result.toolCalls[0].name).toBe('qmd__qmd_query');
         expect(result.toolCalls[0].args).toEqual({
             text: 'user name is Test',
             category: 'user',

@@ -71,7 +71,7 @@ describe('ContextBuilder', () => {
         it('includes memory guidelines with QMD search reference', async () => {
             const content = await builder.writeStaticGeminiMd();
             expect(content).toContain('## Memory Management');
-            expect(content).toContain('qmd_search');
+            expect(content).toContain('qmd_query');
         });
 
         it('includes autonomy level restrictions when not autonomous', async () => {

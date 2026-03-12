@@ -157,7 +157,7 @@ export class ContextBuilder {
         );
         parts.push('');
         parts.push(
-            'To review recent activity, use `qmd_search` for keyword search or `qmd_deep_search` for hybrid search across daily logs and memory files, then `qmd_get` to drill into results.',
+            'To review recent activity, use `qmd_query` for hybrid search across daily logs and memory files, then `qmd_get` to drill into results.',
         );
         parts.push('');
 
@@ -166,7 +166,7 @@ export class ContextBuilder {
         if (autonomyLevel === 'read_only') {
             parts.push('## Restriction: READ_ONLY Mode');
             parts.push('**This session is limited to read-only operations.**');
-            parts.push('- Allowed: file reads, searches, information gathering, `qmd_search`, `qmd_get`');
+            parts.push('- Allowed: file reads, searches, information gathering, `qmd_query`, `qmd_get`');
             parts.push('- Prohibited: file writes/deletes, shell command execution, form submissions');
             parts.push('- If asked to perform a prohibited operation, explain the restriction and decline');
             parts.push('');
