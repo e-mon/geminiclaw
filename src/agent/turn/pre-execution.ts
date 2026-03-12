@@ -73,6 +73,7 @@ export async function buildAgentContext(
         | 'channelContextMaxChars'
         | 'isHomeChannel'
         | 'isDM'
+        | 'deliveryTarget'
     >,
 ): Promise<{ sessionContext: string }> {
     const builder = new ContextBuilder(params.workspacePath);
@@ -131,6 +132,7 @@ export async function buildAgentContext(
         channelContext,
         bootstrap,
         timezone: params.timezone,
+        deliveryTarget: params.deliveryTarget,
     });
 
     return { sessionContext };

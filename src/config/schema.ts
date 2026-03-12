@@ -82,17 +82,6 @@ export const ConfigSchema = z.object({
              */
             model: z.string().default('flash'),
             /**
-             * Execution log channel — every heartbeat result (including HEARTBEAT_OK)
-             * is posted here for continuous visibility into heartbeat health.
-             * Separate from `notifications` which only fires on alerts.
-             */
-            reply: z
-                .object({
-                    channel: z.enum(['discord', 'slack']),
-                    channelId: z.string(),
-                })
-                .optional(),
-            /**
              * Heartbeat notification destinations.
              * Channel notifications receive every run result (execution logs).
              * Desktop notifications only fire on alerts (response is NOT HEARTBEAT_OK).
@@ -234,17 +223,6 @@ export const ConfigSchema = z.object({
         .default({}),
     cron: z
         .object({
-            /**
-             * Default reply destination for cron jobs that don't specify their own reply field.
-             * Results are sent here unless overridden per-job.
-             * Mirrors the CronJob.reply shape.
-             */
-            defaultReply: z
-                .object({
-                    channel: z.enum(['discord', 'slack']),
-                    channelId: z.string(),
-                })
-                .optional(),
             /**
              * Hours after which completed cron session JSONL files are auto-pruned.
              * 0 = disabled (keep forever). Default: 72 (3 days).

@@ -8,7 +8,6 @@
  * don't conflict with ongoing manual or channel tasks.
  */
 
-import { loadConfig } from '../config.js';
 import { inngest } from './client.js';
 
 /**
@@ -18,26 +17,6 @@ import { inngest } from './client.js';
 function buildCronExpression(intervalMin: number): string {
     if (intervalMin === 60) return '0 * * * *';
     return `*/${intervalMin} * * * *`;
-}
-
-/**
- * Resolve the heartbeat reply destination from config.
- * Falls back to the first enabled homeChannel when heartbeat.reply is not set.
- */
-function buildHeartbeatReply(): { channelType: string; channelId: string } | undefined {
-    const config = loadConfig();
-    const hbReply = config.heartbeat.reply;
-    if (hbReply) {
-        return { channelType: hbReply.channel, channelId: hbReply.channelId };
-    }
-    // Fall back to homeChannel — heartbeat reply is the default FYI destination
-    if (config.channels.discord.enabled && config.channels.discord.homeChannel) {
-        return { channelType: 'discord', channelId: config.channels.discord.homeChannel };
-    }
-    if (config.channels.slack.enabled && config.channels.slack.homeChannel) {
-        return { channelType: 'slack', channelId: config.channels.slack.homeChannel };
-    }
-    return undefined;
 }
 
 /**
@@ -62,7 +41,6 @@ export function createHeartbeatCron(intervalMin: number) {
                         'Review digest, check calendar/email, and handle any needed notifications. ' +
                         'Post notifications to the home channel via geminiclaw_post_message. ' +
                         'Always respond with HEARTBEAT_OK when done.',
-                    reply: buildHeartbeatReply(),
                 },
             });
 

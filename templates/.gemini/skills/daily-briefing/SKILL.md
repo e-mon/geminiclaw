@@ -14,7 +14,7 @@ Generate a concise, prioritized daily briefing. Works standalone with core Gemin
 1. Gather   → Pull data from available sources (parallel)
 2. Analyze  → Prioritize and detect conflicts/urgencies
 3. Format   → Produce scannable briefing
-4. Deliver  → Output as reply text
+4. Deliver  → Post to homeChannel via geminiclaw_post_message
 ```
 
 ## Phase 1: Gather Data
@@ -128,7 +128,9 @@ Produce a concise briefing. Target: **under 2 minutes to read**.
 
 ## Phase 4: Deliver
 
-Output the briefing as the reply text. The cron system or channel layer handles delivery to the configured destination (Discord, Slack, etc.).
+Post the briefing to homeChannel via `geminiclaw_post_message`.
+
+When triggered manually, reply directly in the conversation instead of posting to homeChannel.
 
 ## Cron Setup
 
@@ -137,8 +139,7 @@ To run daily, register with the `cron` skill:
 ```
 Schedule: { "type": "cron", "expression": "0 8 * * *" }
 Timezone: [user's timezone from config]
-Prompt: "Run the daily-briefing skill. Output the briefing."
-Reply: { "channel": "discord", "channelId": "[target channel]" }
+Prompt: "Run the daily-briefing skill."
 ```
 
 Adjust the hour (8 = 8:00 AM) to the user's preference.

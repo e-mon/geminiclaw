@@ -23,16 +23,10 @@ export interface AgentRunEventData {
      */
     serializedThread?: string;
     /**
-     * Legacy reply info — kept for cron jobs and non-Chat-SDK triggers (heartbeat, manual).
-     * When serializedThread is present, this field is ignored.
+     * Delivery target for cron jobs — `platform:channelId` string (e.g. "discord:123456").
+     * Injected into agent context so skills know where to post via geminiclaw_post_message.
      */
-    reply?: {
-        /** Adapter identifier — matches ChannelAdapter.channelType (e.g. 'discord'). */
-        channelType: string;
-        channelId: string;
-        /** Threading reference passed to sendReply as opts.replyRef. */
-        replyRef?: string;
-    };
+    deliveryTarget?: string;
     /** Discord/Slack channel topic (description). Injected into session context for per-channel behavior control. */
     channelTopic?: string;
     /** Recent channel conversation context (messages + thread summaries). Serialized ChannelContextData. */
@@ -79,6 +73,8 @@ export interface RunTurnParams {
     channelContext?: string;
     /** Max chars for rendered channel context block. Sourced from config.experimental.channelContext.maxChars. */
     channelContextMaxChars?: number;
+    /** Delivery target for cron jobs — `platform:channelId` (e.g. "discord:123456"). */
+    deliveryTarget?: string;
     /** Sandbox mode: true (auto-detect), false (disabled), 'seatbelt', or 'docker'. */
     sandbox?: SandboxMode;
     /** Internal flag to prevent infinite retry on context overflow. */

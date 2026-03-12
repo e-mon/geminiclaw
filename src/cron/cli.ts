@@ -118,8 +118,8 @@ export function buildCronCommand(): Command {
         .option('--model <model>', 'Override model for this job (e.g. gemini-2.5-flash)')
         .option('--delete-after-run', 'Auto-delete job after run (default: true for at)')
         .option('--no-delete-after-run', 'Keep job after run even if one-shot')
-        .option('--reply-channel <channel>', 'Reply channel type: discord or slack')
-        .option('--reply-channel-id <id>', 'Reply channel ID')
+        .option('--reply-channel <channel>', 'Delivery target channel type: discord or slack')
+        .option('--reply-channel-id <id>', 'Delivery target channel ID')
         .action(
             async (options: {
                 name: string;

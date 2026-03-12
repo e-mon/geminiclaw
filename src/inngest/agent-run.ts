@@ -75,6 +75,7 @@ export const agentRun = inngest.createFunction(
             channelTopic: data.channelTopic,
             channelContext: data.channelContext,
             channelContextMaxChars: config.experimental.channelContext.maxChars,
+            deliveryTarget: data.deliveryTarget,
             sandbox: config.sandbox,
         };
 

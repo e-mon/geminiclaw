@@ -46,6 +46,8 @@ export interface SessionContextOptions {
     bootstrap?: boolean;
     /** IANA timezone for timestamp formatting. Falls back to system timezone. */
     timezone?: string;
+    /** Delivery target for cron jobs — `platform:channelId` (e.g. "discord:123456"). */
+    deliveryTarget?: string;
 }
 
 // ── Truncation helper ────────────────────────────────────────────
@@ -68,6 +70,16 @@ export function truncateWithContext(content: string, maxChars: number): string {
 
 export class ContextBuilder {
     constructor(private workspaceRoot: string) {}
+
+    /** Resolve home channel as `platform:channelId` string. */
+    private resolveHomeChannel(): string | undefined {
+        const config = loadConfig();
+        const dc = config.channels.discord;
+        if (dc.enabled && dc.homeChannel) return `discord:${dc.homeChannel}`;
+        const sc = config.channels.slack;
+        if (sc.enabled && sc.homeChannel) return `slack:${sc.homeChannel}`;
+        return undefined;
+    }
 
     /**
      * Check whether GEMINI.md already exists in the workspace.
@@ -275,13 +287,9 @@ export class ContextBuilder {
             parts.push('**Rotate (every few hours):** Memory maintenance, proactive background work.');
 
             // Inject home channel so the agent knows where to post notifications
-            const config = loadConfig();
-            const dc = config.channels.discord;
-            const sc = config.channels.slack;
-            if (dc.enabled && dc.homeChannel) {
-                parts.push(`Home channel: discord:${dc.homeChannel}`);
-            } else if (sc.enabled && sc.homeChannel) {
-                parts.push(`Home channel: slack:${sc.homeChannel}`);
+            const homeChannel = this.resolveHomeChannel();
+            if (homeChannel) {
+                parts.push(`Home channel: ${homeChannel}`);
             }
 
             parts.push('');
@@ -296,6 +304,17 @@ export class ContextBuilder {
             parts.push('Focus exclusively on the prompt and produce the requested output.');
             parts.push('Do NOT run background heartbeat checks.');
             parts.push('Do NOT respond with HEARTBEAT_OK.');
+
+            // Inject delivery target so the agent knows where to post results
+            const target = options.deliveryTarget ?? this.resolveHomeChannel();
+            if (target) {
+                parts.push('');
+                parts.push(`Delivery target: ${target}`);
+                parts.push(
+                    'Post results via `geminiclaw_post_message` to the delivery target. ' +
+                        'Do NOT output results as plain response text — use the tool for delivery.',
+                );
+            }
         } else {
             parts.push('');
             parts.push('### Interactive Mode');
