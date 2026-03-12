@@ -41,45 +41,19 @@ export function loadConfig(configPath: string = CONFIG_PATH): Config {
         }
     }
 
-    // Migrate legacy config formats before Zod parse
+    // Migrate legacy config formats before Zod parse.
+    // If any migration fires, the updated JSON is written back to disk
+    // so old keys are cleaned up permanently.
     if (typeof json === 'object' && json !== null) {
         const obj = json as Record<string, unknown>;
-
-        // Strip legacy top-level `notifications` (old format: { enabled, method }) that
-        // conflicts with the new `{ channel, channelId }` schema.
-        const notif = obj.notifications;
-        if (notif && typeof notif === 'object' && notif !== null && !('channel' in notif)) {
-            delete obj.notifications;
-        }
-
-        // Migrate legacy per-platform homeChannel → top-level `home`.
-        // Picks the first enabled platform with a homeChannel set.
-        if (!obj.home) {
-            const channels = obj.channels as Record<string, Record<string, unknown>> | undefined;
-            if (channels) {
-                for (const platform of ['discord', 'slack', 'telegram'] as const) {
-                    const ch = channels[platform];
-                    if (ch?.enabled && typeof ch.homeChannel === 'string' && ch.homeChannel) {
-                        obj.home = { channel: platform, channelId: ch.homeChannel };
-                        break;
-                    }
-                }
-            }
-        }
-
-        // Migrate legacy heartbeat.notifications → top-level `notifications`.
-        // Picks the first enabled platform notification channel.
-        if (!obj.notifications) {
-            const hb = obj.heartbeat as Record<string, unknown> | undefined;
-            const hbNotif = hb?.notifications as Record<string, Record<string, unknown>> | undefined;
-            if (hbNotif) {
-                for (const platform of ['discord', 'slack', 'telegram'] as const) {
-                    const ch = hbNotif[platform];
-                    if (ch?.enabled && typeof ch.channelId === 'string' && ch.channelId) {
-                        obj.notifications = { channel: platform, channelId: ch.channelId };
-                        break;
-                    }
-                }
+        if (migrateLegacyConfig(obj)) {
+            try {
+                writeFileSync(configPath, `${JSON.stringify(obj, null, 2)}\n`, {
+                    encoding: 'utf-8',
+                    mode: 0o600,
+                });
+            } catch (err) {
+                process.stderr.write(`[geminiclaw] warning: failed to write migrated config: ${String(err)}\n`);
             }
         }
     }
@@ -171,6 +145,72 @@ export function loadConfig(configPath: string = CONFIG_PATH): Config {
     }
 
     return config;
+}
+
+/**
+ * Migrate legacy config formats in-place.
+ *
+ * Returns true if any migration was applied (caller should persist to disk).
+ *
+ * Migrations:
+ *   1. Old `notifications: { enabled, method }` → deleted (new: `{ channel, channelId }`)
+ *   2. `channels.*.homeChannel` → `home: { channel, channelId }`, old key deleted
+ *   3. `heartbeat.notifications.*.{ enabled, channelId }` → `notifications`, old key deleted
+ */
+function migrateLegacyConfig(obj: Record<string, unknown>): boolean {
+    let migrated = false;
+
+    // 1. Strip legacy top-level `notifications` (old format: { enabled, method })
+    const notif = obj.notifications;
+    if (notif && typeof notif === 'object' && notif !== null && !('channel' in notif)) {
+        delete obj.notifications;
+        migrated = true;
+    }
+
+    // 2. Migrate legacy per-platform homeChannel → top-level `home`
+    if (!obj.home) {
+        const channels = obj.channels as Record<string, Record<string, unknown>> | undefined;
+        if (channels) {
+            for (const platform of ['discord', 'slack', 'telegram'] as const) {
+                const ch = channels[platform];
+                if (ch?.enabled && typeof ch.homeChannel === 'string' && ch.homeChannel) {
+                    obj.home = { channel: platform, channelId: ch.homeChannel };
+                    migrated = true;
+                    break;
+                }
+            }
+        }
+    }
+
+    // Clean up homeChannel keys from all platforms regardless of which was picked
+    const channels = obj.channels as Record<string, Record<string, unknown>> | undefined;
+    if (channels) {
+        for (const platform of ['discord', 'slack', 'telegram']) {
+            if (channels[platform] && 'homeChannel' in channels[platform]) {
+                delete channels[platform].homeChannel;
+                migrated = true;
+            }
+        }
+    }
+
+    // 3. Migrate legacy heartbeat.notifications → top-level `notifications`
+    const hb = obj.heartbeat as Record<string, unknown> | undefined;
+    const hbNotif = hb?.notifications as Record<string, Record<string, unknown>> | undefined;
+    if (hbNotif) {
+        if (!obj.notifications) {
+            for (const platform of ['discord', 'slack', 'telegram'] as const) {
+                const ch = hbNotif[platform];
+                if (ch?.enabled && typeof ch.channelId === 'string' && ch.channelId) {
+                    obj.notifications = { channel: platform, channelId: ch.channelId };
+                    break;
+                }
+            }
+        }
+        delete hb!.notifications;
+        migrated = true;
+    }
+
+    return migrated;
 }
 
 /**
