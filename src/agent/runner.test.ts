@@ -192,6 +192,24 @@ describe('RunResultBuilder', () => {
         expect(result.trigger).toBe('heartbeat');
     });
 
+    it('detects HEARTBEAT_OK appended to end of line without newline', () => {
+        const builder = new RunResultBuilder('heartbeat');
+        builder.handleEvent({
+            ...messageEvent,
+            content: 'Updated heartbeat-state.json.HEARTBEAT_OK',
+        });
+        expect(builder.build().heartbeatOk).toBe(true);
+    });
+
+    it('detects HEARTBEAT_OK wrapped in markdown bold', () => {
+        const builder = new RunResultBuilder('heartbeat');
+        builder.handleEvent({
+            ...messageEvent,
+            content: '**HEARTBEAT_OK**',
+        });
+        expect(builder.build().heartbeatOk).toBe(true);
+    });
+
     it('heartbeatOk is false when not present', () => {
         const builder = new RunResultBuilder();
         builder.handleEvent(messageEvent);
