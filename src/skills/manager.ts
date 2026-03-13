@@ -225,33 +225,57 @@ export async function removeSkill(name: string, workspaceDir: string): Promise<v
  *    danger: delete staging
  * 4. Copy skills-lock.json to workspace
  */
-export async function installSkill(
+/**
+ * Stage skills from a ref into a temporary directory without installing.
+ * Returns the staging dir path and list of skill names found.
+ * Caller is responsible for cleanup via cleanupStaging().
+ */
+export async function stageSkill(
     ref: string,
-    workspaceDir: string,
-    options?: { force?: boolean; skipScan?: boolean; skill?: string },
-): Promise<InstallResult> {
+    options?: { skill?: string },
+): Promise<{ stagingDir: string; skillNames: string[]; stagingSkillsDir: string }> {
     const stagingDir = mkdtempSync(join(tmpdir(), 'geminiclaw-skill-'));
 
     try {
-        // Run bunx skills add in the staging directory
         const addArgs = ['add', ref, '--agent', 'gemini-cli', '-y'];
         if (options?.skill) {
             addArgs.push('--skill', options.skill);
         }
         await execNpxSkills(addArgs, stagingDir);
 
-        // Detect new skills from staging .agents/skills/
         const stagingSkillsDir = join(stagingDir, '.agents', 'skills');
         if (!existsSync(stagingSkillsDir)) {
-            return { installed: [], scanned: [], warned: [], blocked: [], reports: {} };
+            return { stagingDir, skillNames: [], stagingSkillsDir };
         }
 
-        const newSkills = readdirSync(stagingSkillsDir).filter((name) => {
+        const skillNames = readdirSync(stagingSkillsDir).filter((name) => {
             const p = join(stagingSkillsDir, name, SKILL_FILENAME);
             return existsSync(p);
         });
 
+        return { stagingDir, skillNames, stagingSkillsDir };
+    } catch (err) {
+        rmSync(stagingDir, { recursive: true, force: true });
+        throw err;
+    }
+}
+
+export async function installSkill(
+    ref: string,
+    workspaceDir: string,
+    options?: { force?: boolean; skipScan?: boolean; skill?: string },
+): Promise<InstallResult> {
+    const {
+        stagingDir,
+        skillNames: newSkills,
+        stagingSkillsDir,
+    } = await stageSkill(ref, {
+        skill: options?.skill,
+    });
+
+    try {
         if (newSkills.length === 0) {
+            cleanupStaging(stagingDir);
             return { installed: [], scanned: [], warned: [], blocked: [], reports: {} };
         }
 

@@ -27,7 +27,7 @@ import { Workspace } from '../../workspace.js';
  * Creates workspace directories, copies templates, registers MCP servers,
  * and migrates legacy memories.
  */
-export async function initializeWorkspace(config: Config, opts?: { skipQmd?: boolean }): Promise<void> {
+export async function initializeWorkspace(config: Config): Promise<void> {
     const workspacePath = getWorkspacePath(config);
 
     await Workspace.create(workspacePath);
@@ -87,11 +87,6 @@ export async function initializeWorkspace(config: Config, opts?: { skipQmd?: boo
 
     saveGeminiclawSettings(gcSettings);
 
-    // Download QMD models and register memory collection
-    if (!opts?.skipQmd) {
-        setupQmdIndex(workspacePath);
-    }
-
     // Clean up geminiclaw-related entries from ~/.gemini/settings.json
     const geminiSettingsPath = join(process.env.HOME ?? '~', '.gemini', 'settings.json');
     if (existsSync(geminiSettingsPath)) {
@@ -112,6 +107,9 @@ export async function initializeWorkspace(config: Config, opts?: { skipQmd?: boo
             /* ignore */
         }
     }
+
+    // Download QMD models and register memory collection (last — heaviest step)
+    setupQmdIndex(workspacePath);
 }
 
 /** Download QMD models and register the memory collection. */

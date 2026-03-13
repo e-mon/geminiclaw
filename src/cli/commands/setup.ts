@@ -942,49 +942,44 @@ function checkGeminiCli(): void {
     p.log.success(`Gemini CLI ${versionMatch[1]}`);
 }
 
-export async function runSetupWizard(config: Config, workspacePath: string): Promise<void> {
+export async function runSetupWizard(workspacePath: string): Promise<void> {
     p.intro('GeminiClaw Setup');
 
     // Preflight: check Gemini CLI version
     checkGeminiCli();
 
-    // Step 1: Initialize workspace (skip QMD — runs at the end with a descriptive spinner)
-    const s = p.spinner();
-    s.start('Initializing workspace...');
-    await initializeWorkspace(config, { skipQmd: true });
-    s.stop('Workspace initialized.');
-
-    // Step 2: Language preference
+    // Step 1: Language preference
     await stepLanguage();
 
     // SOUL.md is now generated during bootstrap (first agent conversation)
 
-    // Step 3: Discord
+    // Step 2: Discord
     const discordEnabled = await stepDiscord();
 
-    // Step 4: Slack
+    // Step 3: Slack
     const slackEnabled = await stepSlack();
 
-    // Step 5: Telegram
+    // Step 4: Telegram
     const telegramEnabled = await stepTelegram();
 
-    // Step 6: Google Workspace
+    // Step 5: Google Workspace
     await stepGoogle();
 
-    // Step 7: Timezone
+    // Step 6: Timezone
     await stepTimezone();
 
-    // Step 8: Home channel selection (only for adapters enabled in this session)
+    // Step 7: Home channel selection (only for adapters enabled in this session)
     if (process.stdin.isTTY) {
         await stepHome({ discord: discordEnabled, slack: slackEnabled, telegram: telegramEnabled });
     }
 
-    // Re-initialize to register MCP servers and download memory search models.
+    // Step 8: Initialize workspace, register MCP servers, download memory search models.
+    // This is the heaviest step — QMD model download (~500MB) runs on first setup.
     const freshConfig = loadConfig();
-    const finalSpinner = p.spinner();
-    finalSpinner.start('Finalizing setup (downloading memory search models, first run may take a few minutes)...');
+    const initSpinner = p.spinner();
+    initSpinner.start('Setting up workspace and MCP servers...');
     await initializeWorkspace(freshConfig);
-    finalSpinner.stop('Setup finalized.');
+    initSpinner.stop('Workspace initialized, MCP servers registered, memory search models ready.');
 
     // Summary
     printSummary(freshConfig, workspacePath);
@@ -1067,6 +1062,6 @@ export function registerSetupCommand(program: Command): void {
             }
 
             const workspacePath = getWorkspacePath(config);
-            await runSetupWizard(config, workspacePath);
+            await runSetupWizard(workspacePath);
         });
 }

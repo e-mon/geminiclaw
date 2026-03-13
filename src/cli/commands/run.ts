@@ -130,7 +130,7 @@ export function registerRunCommand(program: Command): void {
                 if (useInteractive && !config.setupCompleted) {
                     process.stderr.write('Initial setup is not complete. Starting setup...\n');
                     const { runSetupWizard } = await import('./setup.js');
-                    await runSetupWizard(config, workspacePath);
+                    await runSetupWizard(workspacePath);
                 }
 
                 if (useInteractive) {
