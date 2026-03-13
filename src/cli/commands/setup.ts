@@ -73,6 +73,72 @@ async function stepLanguage(): Promise<void> {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Connection tests                                                  */
+/* ------------------------------------------------------------------ */
+
+async function testDiscordToken(token: string): Promise<string | null> {
+    try {
+        const resp = await fetch('https://discord.com/api/v10/users/@me', {
+            headers: { Authorization: `Bot ${token}` },
+        });
+        if (!resp.ok) return `Discord API ${resp.status}: unauthorized`;
+        const data = (await resp.json()) as { username?: string; id?: string };
+        return data.username ? `Connected as ${data.username} (${data.id})` : null;
+    } catch (err) {
+        return `Connection failed: ${err instanceof Error ? err.message : String(err)}`;
+    }
+}
+
+async function testSlackToken(token: string): Promise<string | null> {
+    try {
+        const resp = await fetch('https://slack.com/api/auth.test', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!resp.ok) return `Slack API HTTP ${resp.status}`;
+        const data = (await resp.json()) as { ok: boolean; error?: string; user?: string; team?: string };
+        if (!data.ok) return `Slack auth failed: ${data.error ?? 'unknown'}`;
+        return `Connected as ${data.user} in ${data.team}`;
+    } catch (err) {
+        return `Connection failed: ${err instanceof Error ? err.message : String(err)}`;
+    }
+}
+
+async function testTelegramToken(token: string): Promise<string | null> {
+    try {
+        const resp = await fetch(`https://api.telegram.org/bot${token}/getMe`);
+        if (!resp.ok) return `Telegram API ${resp.status}: unauthorized`;
+        const data = (await resp.json()) as { ok: boolean; result?: { username?: string; first_name?: string } };
+        if (!data.ok) return 'Telegram auth failed';
+        const name = data.result?.username ?? data.result?.first_name ?? 'unknown';
+        return `Connected as @${name}`;
+    } catch (err) {
+        return `Connection failed: ${err instanceof Error ? err.message : String(err)}`;
+    }
+}
+
+/**
+ * Run a connection test with a spinner. Returns true if successful.
+ * On failure, logs a warning but does NOT block setup — the user can fix later.
+ */
+async function runConnectionTest(
+    testFn: (token: string) => Promise<string | null>,
+    token: string,
+    platform: string,
+): Promise<boolean> {
+    const s = p.spinner();
+    s.start(`Testing ${platform} connection...`);
+    const result = await testFn(token);
+    if (result && !result.startsWith('Connected')) {
+        s.stop(`${platform}: ${result}`);
+        p.log.warn('Token saved but connection test failed. You can update it later.');
+        return false;
+    }
+    s.stop(result ?? `${platform}: connected.`);
+    return true;
+}
+
+/* ------------------------------------------------------------------ */
 /*  Step: Discord config                                              */
 /* ------------------------------------------------------------------ */
 
@@ -87,7 +153,7 @@ async function stepDiscord(): Promise<void> {
     p.note(
         [
             '1. Create a Bot at https://discord.com/developers/applications',
-            "2. Copy the Bot Token (you'll enter it in the secrets step)",
+            '2. Copy the Bot Token',
             '3. Enable Privileged Gateway Intents:',
             '   - MESSAGE CONTENT INTENT',
             '   - SERVER MEMBERS INTENT',
@@ -99,8 +165,23 @@ async function stepDiscord(): Promise<void> {
         'Discord Bot Setup',
     );
 
-    patchConfigFile({ channels: { discord: { enabled: true } } });
-    p.log.success('Discord integration enabled.');
+    const token = await p.password({
+        message: 'Discord Bot Token',
+        mask: '*',
+    });
+    exitIfCancelled(token);
+
+    if (token) {
+        await vault.set('discord-token', token);
+        patchConfigFile({
+            channels: { discord: { enabled: true, token: `${VAULT_REF_PREFIX}discord-token` } },
+        });
+        p.log.success('Discord: enabled, token saved to vault.');
+        await runConnectionTest(testDiscordToken, token, 'Discord');
+    } else {
+        patchConfigFile({ channels: { discord: { enabled: true } } });
+        p.log.warn('Discord: enabled without token. Run `geminiclaw setup --step discord` to add it later.');
+    }
 }
 
 /** Parse a "platform:channelId" value, splitting only on the first colon. */
@@ -268,11 +349,10 @@ async function stepSlack(): Promise<void> {
     p.note(
         [
             '1. Create an App at https://api.slack.com/apps',
-            "2. Copy the Bot Token (xoxb-...) — you'll enter it next",
-            '3. Copy the Signing Secret from Basic Information → App Credentials',
-            '4. Enable Event Subscriptions and subscribe to:',
+            '2. Copy the Bot Token (xoxb-...) and Signing Secret',
+            '3. Enable Event Subscriptions and subscribe to:',
             '   app_mention, message.channels, message.groups, message.im',
-            '5. Add Bot Token Scopes under OAuth & Permissions:',
+            '4. Add Bot Token Scopes under OAuth & Permissions:',
             '   chat:write, channels:history, channels:read, reactions:write,',
             '   app_mentions:read, im:history, files:read, files:write',
             '',
@@ -281,8 +361,43 @@ async function stepSlack(): Promise<void> {
         'Slack App Setup',
     );
 
-    patchConfigFile({ channels: { slack: { enabled: true } } });
-    p.log.success('Slack integration enabled.');
+    const token = await p.password({
+        message: 'Slack Bot Token (xoxb-...)',
+        mask: '*',
+        validate: (v) => {
+            if (!v) return undefined;
+            return v.startsWith('xoxb-') ? undefined : 'Token must start with xoxb-';
+        },
+    });
+    exitIfCancelled(token);
+
+    const signingSecret = await p.password({
+        message: 'Slack Signing Secret',
+        mask: '*',
+    });
+    exitIfCancelled(signingSecret);
+
+    const patch: Record<string, unknown> = { enabled: true };
+    const secrets: Array<{ key: string; value: string; configKey: string }> = [];
+
+    if (token) secrets.push({ key: 'slack-bot-token', value: token, configKey: 'token' });
+    if (signingSecret) secrets.push({ key: 'slack-signing-secret', value: signingSecret, configKey: 'signingSecret' });
+
+    for (const s of secrets) {
+        await vault.set(s.key, s.value);
+        patch[s.configKey] = `${VAULT_REF_PREFIX}${s.key}`;
+    }
+
+    patchConfigFile({ channels: { slack: patch } });
+
+    if (secrets.length > 0) {
+        p.log.success(`Slack: enabled, ${secrets.length} secret(s) saved to vault.`);
+        if (token) {
+            await runConnectionTest(testSlackToken, token, 'Slack');
+        }
+    } else {
+        p.log.warn('Slack: enabled without credentials. Run `geminiclaw setup --step slack` to add them later.');
+    }
 }
 
 /* ------------------------------------------------------------------ */
@@ -307,8 +422,23 @@ async function stepTelegram(): Promise<void> {
         'Telegram Bot Setup',
     );
 
-    patchConfigFile({ channels: { telegram: { enabled: true } } });
-    p.log.success('Telegram integration enabled.');
+    const token = await p.password({
+        message: 'Telegram Bot Token',
+        mask: '*',
+    });
+    exitIfCancelled(token);
+
+    if (token) {
+        await vault.set('telegram-bot-token', token);
+        patchConfigFile({
+            channels: { telegram: { enabled: true, botToken: `${VAULT_REF_PREFIX}telegram-bot-token` } },
+        });
+        p.log.success('Telegram: enabled, token saved to vault.');
+        await runConnectionTest(testTelegramToken, token, 'Telegram');
+    } else {
+        patchConfigFile({ channels: { telegram: { enabled: true } } });
+        p.log.warn('Telegram: enabled without token. Run `geminiclaw setup --step telegram` to add it later.');
+    }
 }
 
 /* ------------------------------------------------------------------ */
@@ -799,12 +929,7 @@ export async function runSetupWizard(config: Config, workspacePath: string): Pro
     // Step 7: Timezone
     await stepTimezone();
 
-    // Step 8: Secrets
-    if (process.stdin.isTTY) {
-        await collectSecrets();
-    }
-
-    // Step 9: Home channel selection (mandatory, requires tokens from step 8)
+    // Step 8: Home channel selection (tokens collected in adapter steps above)
     if (process.stdin.isTTY) {
         await stepHome();
     }
