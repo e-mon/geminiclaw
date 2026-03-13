@@ -156,14 +156,14 @@ const TOOLS = [
 ];
 
 /**
- * skill install を直接ハンドルする。
+ * Handle skill install directly (not via CLI subprocess).
  *
- * フロー:
- *   1. staging dir に bunx skills add（無害）
- *   2. セキュリティスキャン
- *   3. safe → 即座に workspace に移動
- *   4. warning/danger → findings 付きで ask_user → ユーザー判断
- *   5. staging クリーンアップ
+ * Flow:
+ *   1. bunx skills add into a staging dir (harmless)
+ *   2. Run security scan
+ *   3. safe -> move to workspace immediately
+ *   4. warning/danger -> show findings via ask_user -> user decides
+ *   5. Clean up staging dir
  */
 async function handleSkillInstall(
     workspace: string,
@@ -172,7 +172,7 @@ async function handleSkillInstall(
     const { installSkill, confirmInstall, cleanupStaging } = await import('../skills/manager.js');
     const start = Date.now();
 
-    // args をパース: <ref> [--skill <name>] [--force]
+    // Parse args: <ref> [--skill <name>] [--force]
     const ref = args.find((a) => !a.startsWith('-'));
     if (!ref) {
         return { content: [{ type: 'text', text: 'Error: missing skill source reference' }], isError: true };
@@ -190,7 +190,7 @@ async function handleSkillInstall(
 
         const output: string[] = [];
 
-        // safe スキル: supervised モードではユーザー確認を挟む
+        // Safe skills: require user confirmation in supervised mode
         if (result.scanned.length > 0) {
             const names = result.scanned.join(', ');
             await confirmIfNeeded(workspace, 'write', `Install safe skills: ${names}`);
@@ -199,7 +199,7 @@ async function handleSkillInstall(
             }
         }
 
-        // warned スキル: findings 付きで ask_user
+        // Warned skills: show findings via ask_user
         if (result.warned.length > 0 && result._stagingDir) {
             for (const name of result.warned) {
                 const report = result.reports[name];
@@ -222,7 +222,7 @@ async function handleSkillInstall(
             }
         }
 
-        // blocked スキル
+        // Blocked skills
         for (const name of result.blocked) {
             const report = result.reports[name];
             const findingsText = report

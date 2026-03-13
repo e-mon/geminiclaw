@@ -40,7 +40,7 @@ if (blocksData.domain === 'x.com') {
     {
       sourceUrl: blocksData.url || '',
       title: blocksData.title || '',
-      targetLang: translatedData.targetLang || 'ja',
+      targetLang: translatedData.targetLang || '',
     }
   );
   process.stdout.write(html);

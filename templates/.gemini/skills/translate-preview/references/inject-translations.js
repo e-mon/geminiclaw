@@ -80,9 +80,9 @@ function _tp_injectUIOverlay(doc, data) {
         (data.sourceUrl ? '<a class="tp-header-url" href="' + _tp_escapeHtml(data.sourceUrl) + '" target="_blank" rel="noopener">' + _tp_escapeHtml(data.sourceUrl) + '</a>' : '') +
       '</div>' +
       '<div class="tp-header-controls">' +
-        '<button class="tp-btn tp-btn-active" data-tp-mode="translated">訳文</button>' +
-        '<button class="tp-btn" data-tp-mode="both">対訳</button>' +
-        '<button class="tp-btn" data-tp-mode="original">原文</button>' +
+        '<button class="tp-btn tp-btn-active" data-tp-mode="translated">Translated</button>' +
+        '<button class="tp-btn" data-tp-mode="both">Both</button>' +
+        '<button class="tp-btn" data-tp-mode="original">Original</button>' +
       '</div>' +
     '</div>';
 

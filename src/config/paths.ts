@@ -10,7 +10,7 @@ import type { Config } from './schema.js';
 
 export const GEMINICLAW_HOME = join(homedir(), '.geminiclaw');
 export const CONFIG_PATH = join(GEMINICLAW_HOME, 'config.json');
-/** GeminiClaw固有のGemini CLI設定ファイル。~/.gemini/settings.jsonには書かない。 */
+/** GeminiClaw-specific Gemini CLI settings file. Never written to ~/.gemini/settings.json. */
 export const GEMINICLAW_SETTINGS_PATH = join(GEMINICLAW_HOME, 'settings.json');
 
 export const BROWSER_PROFILE_DIR = join(GEMINICLAW_HOME, 'browser-profile');

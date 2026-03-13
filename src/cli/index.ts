@@ -62,7 +62,7 @@ program.addCommand(buildSkillCommand());
 // Show help when no command is given (default Commander behavior is silent exit)
 if (process.argv.length <= 2) {
     program.outputHelp();
-    process.stderr.write('\n  はじめての方は geminiclaw setup を実行してください。\n\n');
+    process.stderr.write('\n  New here? Run geminiclaw setup to get started.\n\n');
 } else {
     program.parse();
 }

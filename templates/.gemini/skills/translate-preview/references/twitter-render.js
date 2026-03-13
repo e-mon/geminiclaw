@@ -9,7 +9,7 @@
 //
 // Produces the same bilingual UI as inject-translations.js:
 //   - tp-block wrappers with tp-original / tp-translated
-//   - Fixed header with 訳文/対訳/原文 toggle buttons
+//   - Fixed header with Translated/Both/Original toggle buttons
 //   - Dark mode support
 //   - Long-press and right-click individual block toggle
 
@@ -66,7 +66,7 @@ function renderTwitterHtml(blocks, translatedBlocks, options) {
   var opts = options || {};
   var sourceUrl = opts.sourceUrl || '';
   var title = opts.title || '';
-  var targetLang = opts.targetLang || 'ja';
+  var targetLang = opts.targetLang || '';
 
   // Build translation lookup: id → translated text
   // Accept three formats:
@@ -123,9 +123,9 @@ function _tr_getHeaderHtml(sourceUrl) {
         urlHtml +
       '</div>' +
       '<div class="tp-header-controls">' +
-        '<button class="tp-btn tp-btn-active" data-tp-mode="translated">訳文</button>' +
-        '<button class="tp-btn" data-tp-mode="both">対訳</button>' +
-        '<button class="tp-btn" data-tp-mode="original">原文</button>' +
+        '<button class="tp-btn tp-btn-active" data-tp-mode="translated">Translated</button>' +
+        '<button class="tp-btn" data-tp-mode="both">Both</button>' +
+        '<button class="tp-btn" data-tp-mode="original">Original</button>' +
       '</div>' +
     '</div>' +
   '</div>';
@@ -263,7 +263,7 @@ if (typeof process !== 'undefined' && process.argv && process.argv[1] &&
     {
       sourceUrl: blocksData.url || '',
       title: blocksData.title || '',
-      targetLang: translatedData.targetLang || 'ja',
+      targetLang: translatedData.targetLang || '',
     }
   );
 

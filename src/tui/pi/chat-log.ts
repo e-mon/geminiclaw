@@ -166,12 +166,12 @@ export class ChatLogComponent implements Component {
         const hintParts: string[] = [];
         const hasThink = this._chunks.some((c) => c.kind === 'think');
         if (hasThink) {
-            hintParts.push(mutedText(`[Ctrl+O] 思考${this.showThinking ? 'ON' : 'OFF'}`));
+            hintParts.push(mutedText(`[Ctrl+O] Thinking ${this.showThinking ? 'ON' : 'OFF'}`));
         }
         if (!isAtBottom) {
-            hintParts.push(chalk.yellow.dim(`↑ [${startIdx + 1}–${endIdx}/${total}] PgDn で最新へ`));
+            hintParts.push(chalk.yellow.dim(`↑ [${startIdx + 1}–${endIdx}/${total}] PgDn to latest`));
         } else if (total > displayHeight) {
-            hintParts.push(mutedText('PgUp / Opt+↑ でスクロール'));
+            hintParts.push(mutedText('PgUp / Opt+↑ to scroll'));
         }
 
         const hint = padToWidth(`  ${hintParts.join('  ')}`, width);

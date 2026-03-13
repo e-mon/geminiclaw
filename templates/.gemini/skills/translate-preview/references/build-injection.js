@@ -38,7 +38,7 @@ function buildInjectionPayload(blocksData, translatedData) {
     blocks: mergedBlocks,
     sourceUrl: blocksData.url || '',
     title: blocksData.title || '',
-    targetLang: translatedData.targetLang || 'ja',
+    targetLang: translatedData.targetLang || '',
   };
 
   // Include extract-blocks.js so extractBlocks() is available for DOM re-marking

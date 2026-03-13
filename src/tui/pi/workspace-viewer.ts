@@ -115,12 +115,12 @@ export class WorkspaceViewerComponent implements Component {
 
     private _renderList(w: number): string[] {
         const rows: string[] = [];
-        const hint = mutedText('[↑↓] 選択  [Enter] 開く  [Esc] 閉じる');
+        const hint = mutedText('[↑↓] Select  [Enter] Open  [Esc] Close');
         rows.push(padToWidth(`  ${toolTitle.bold('Workspace Files')}  ${hint}`, w));
         rows.push(padToWidth(borderDim('─'.repeat(w)), w));
 
         if (!this._loaded || this.files.length === 0) {
-            rows.push(padToWidth(mutedText('  ファイルなし'), w));
+            rows.push(padToWidth(mutedText('  No files'), w));
         } else {
             for (let i = 0; i < this.files.length; i++) {
                 const selected = i === this.selectedIdx;
@@ -151,7 +151,7 @@ export class WorkspaceViewerComponent implements Component {
         const visible = reflowed.slice(scroll, scroll + MAX_CONTENT);
         while (visible.length < MAX_CONTENT) visible.push('');
 
-        const hint = mutedText('[↑↓/PgUp/PgDn] スクロール  [Esc] 一覧へ');
+        const hint = mutedText('[↑↓/PgUp/PgDn] Scroll  [Esc] Back to list');
         const rows: string[] = [];
         rows.push(padToWidth(`  ${accent.bold(this.detailFile)}  ${hint}`, w));
         rows.push(padToWidth(borderDim('─'.repeat(w)), w));
@@ -162,8 +162,8 @@ export class WorkspaceViewerComponent implements Component {
 
         const scrollHint =
             total > MAX_CONTENT
-                ? mutedText(`  [${scroll + 1}–${Math.min(scroll + MAX_CONTENT, total)}/${total}行]`)
-                : mutedText(`  ${total}行`);
+                ? mutedText(`  [${scroll + 1}–${Math.min(scroll + MAX_CONTENT, total)}/${total} lines]`)
+                : mutedText(`  ${total} lines`);
         rows.push(padToWidth(borderDim('─'.repeat(w)), w));
         rows.push(padToWidth(scrollHint, w));
         return rows;
@@ -174,7 +174,7 @@ export class WorkspaceViewerComponent implements Component {
             const raw = await readFile(join(this.workspacePath, filename), 'utf-8');
             this.detailLines = raw.split('\n');
         } catch {
-            this.detailLines = ['(読み込みエラー)'];
+            this.detailLines = ['(Failed to read file)'];
         }
         this.detailFile = filename;
         this.detailScroll = 0;
