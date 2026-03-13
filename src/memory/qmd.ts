@@ -7,19 +7,19 @@
  */
 
 import { execFile } from 'node:child_process';
-import { createRequire } from 'node:module';
-import { dirname } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createLogger } from '../logger.js';
 
 const log = createLogger('qmd');
 
 let updating = false;
 
-/** Resolve the QMD CLI entrypoint via package resolution. */
+/** Resolve the QMD CLI entrypoint via ESM module resolution. */
 function resolveQmdEntrypoint(): string {
-    const require = createRequire(import.meta.url);
-    const qmdDir = dirname(require.resolve('@tobilu/qmd/package.json'));
-    return `${qmdDir}/dist/qmd.js`;
+    // import.meta.resolve('.') → file:///…/dist/index.js, dirname twice → package root
+    const qmdDir = dirname(dirname(fileURLToPath(import.meta.resolve('@tobilu/qmd'))));
+    return join(qmdDir, 'dist', 'qmd.js');
 }
 
 function runQmd(entrypoint: string, subcommand: string, timeoutMs: number): Promise<void> {

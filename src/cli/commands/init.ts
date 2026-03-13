@@ -4,8 +4,8 @@
 
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { Command } from 'commander';
 import {
     CONFIG_PATH,
@@ -52,8 +52,7 @@ export async function initializeWorkspace(config: Config): Promise<void> {
 
     // QMD memory search — served via host HTTP daemon (started in serve.ts).
     // Resolve qmdEntrypoint for `qmd pull` / `qmd collection add` below.
-    const require = createRequire(import.meta.url);
-    const qmdDir = dirname(require.resolve('@tobilu/qmd/package.json'));
+    const qmdDir = dirname(dirname(fileURLToPath(import.meta.resolve('@tobilu/qmd'))));
     const qmdEntrypoint = join(qmdDir, 'dist', 'qmd.js');
     // Clean up legacy memory MCP server
     delete gcSettings.mcpServers['geminiclaw-memory'];
