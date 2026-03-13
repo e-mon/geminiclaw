@@ -10,6 +10,7 @@
  */
 
 import { spawn } from 'node:child_process';
+import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 import { Command } from 'commander';
 import { getWorkspacePath, loadConfig } from '../config.js';
@@ -23,9 +24,10 @@ import {
     listSkills,
     removeSkill,
     skillExists,
+    stageSkill,
 } from './manager.js';
 import { scanSkill } from './scanner.js';
-import type { RiskLevel, SecurityFinding } from './types.js';
+import type { RiskLevel, SecurityFinding, SecurityReport } from './types.js';
 
 const RISK_ICONS: Record<RiskLevel, string> = {
     safe: '\u2705',
@@ -41,6 +43,18 @@ function printFindings(findings: SecurityFinding[]): void {
         process.stdout.write(`  ${icon} [${f.severity.toUpperCase()}] ${f.file}:${f.line}\n`);
         process.stdout.write(`     ${f.description}\n`);
         process.stdout.write(`     pattern: /${f.pattern}/\n`);
+    }
+}
+
+function printScanReport(name: string, report: SecurityReport): void {
+    const icon = RISK_ICONS[report.riskLevel];
+    process.stdout.write(`\n${icon} ${name}: ${report.riskLevel.toUpperCase()}\n`);
+    process.stdout.write(`   Scanned at: ${report.scannedAt}\n`);
+
+    printFindings(report.findings);
+
+    if (report.llmAdvisory) {
+        process.stdout.write(`\nLLM Advisory (informational only):\n  ${report.llmAdvisory}\n`);
     }
 }
 
@@ -139,40 +153,72 @@ export function buildSkillCommand(): Command {
     // ── skill scan ────────────────────────────────────────────────
     skill
         .command('scan')
-        .description('Security scan an installed skill')
-        .argument('<name>', 'Skill name')
-        .option('--skip-llm', 'Skip LLM advisory review (static scan only)')
+        .description('Security scan a skill source before installing')
+        .argument('<ref>', 'Skill source (e.g. owner/repo, GitHub URL, local path)')
+        .option('--local', 'Scan an already-installed skill by name instead of a ref')
+        .option('--llm', 'Include LLM advisory review (starts ACP session, slower)')
         .option('--model <model>', 'Gemini model for LLM review')
-        .action(async (name: string, options: { skipLlm?: boolean; model?: string }) => {
+        .option('--skill <name>', 'Scan a specific skill from the source')
+        .action(async (ref: string, options: { local?: boolean; llm?: boolean; model?: string; skill?: string }) => {
             const config = loadConfig();
             const workspacePath = getWorkspacePath(config);
 
-            if (!skillExists(name, workspacePath)) {
-                process.stderr.write(`Error: Skill not found: ${name}\n`);
+            if (options.local) {
+                // --local: scan an installed skill by name (legacy behavior)
+                if (!skillExists(ref, workspacePath)) {
+                    process.stderr.write(`Error: Skill not found: ${ref}\n`);
+                    process.exit(1);
+                }
+
+                const skillDir = getSkillDir(ref, workspacePath);
+                const skipLlm = !options.llm;
+                process.stdout.write(`Scanning installed skill: ${ref}${skipLlm ? '' : ' (+ LLM advisory)'}\n`);
+
+                const report = await scanSkill(skillDir, {
+                    skipLlm,
+                    model: options.model,
+                    workspacePath,
+                });
+
+                printScanReport(ref, report);
+                if (report.riskLevel === 'danger') process.exit(2);
+                return;
+            }
+
+            // Default: stage from ref, scan, then cleanup (no install)
+            process.stdout.write(`Fetching: ${ref}\n`);
+
+            let stagingDir: string | undefined;
+            try {
+                const staged = await stageSkill(ref, { skill: options.skill });
+                stagingDir = staged.stagingDir;
+
+                if (staged.skillNames.length === 0) {
+                    process.stdout.write('No skills found in source.\n');
+                    return;
+                }
+
+                const skipLlm = !options.llm;
+                let hasDanger = false;
+                for (const name of staged.skillNames) {
+                    const skillDir = join(staged.stagingSkillsDir, name);
+                    process.stdout.write(`\nScanning: ${name}${skipLlm ? '' : ' (+ LLM advisory)'}\n`);
+
+                    const report = await scanSkill(skillDir, {
+                        skipLlm,
+                        model: options.model,
+                        workspacePath,
+                    });
+
+                    printScanReport(name, report);
+                    if (report.riskLevel === 'danger') hasDanger = true;
+                }
+                if (hasDanger) process.exit(2);
+            } catch (err) {
+                process.stderr.write(`Error: ${err instanceof Error ? err.message : String(err)}\n`);
                 process.exit(1);
-            }
-
-            const skillDir = getSkillDir(name, workspacePath);
-            process.stdout.write(`Scanning skill: ${name}${options.skipLlm ? ' (static only)' : ''}\n`);
-
-            const report = await scanSkill(skillDir, {
-                skipLlm: options.skipLlm,
-                model: options.model,
-                workspacePath,
-            });
-
-            const icon = RISK_ICONS[report.riskLevel];
-            process.stdout.write(`\n${icon} Risk level: ${report.riskLevel.toUpperCase()}\n`);
-            process.stdout.write(`   Scanned at: ${report.scannedAt}\n`);
-
-            printFindings(report.findings);
-
-            if (report.llmAdvisory) {
-                process.stdout.write(`\nLLM Advisory (informational only):\n  ${report.llmAdvisory}\n`);
-            }
-
-            if (report.riskLevel === 'danger') {
-                process.exit(2);
+            } finally {
+                if (stagingDir) cleanupStaging(stagingDir);
             }
         });
 

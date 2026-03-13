@@ -73,21 +73,135 @@ async function stepLanguage(): Promise<void> {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Connection tests                                                  */
+/* ------------------------------------------------------------------ */
+
+type ConnectionTestResult = { ok: true; message: string } | { ok: false; error: string };
+
+async function testDiscordToken(token: string): Promise<ConnectionTestResult> {
+    try {
+        const resp = await fetch('https://discord.com/api/v10/users/@me', {
+            headers: { Authorization: `Bot ${token}` },
+        });
+        if (!resp.ok) return { ok: false, error: `Discord API ${resp.status}: unauthorized` };
+        const data = (await resp.json()) as { username?: string; id?: string };
+        return { ok: true, message: `Connected as ${data.username} (${data.id})` };
+    } catch (err) {
+        return { ok: false, error: `Connection failed: ${err instanceof Error ? err.message : String(err)}` };
+    }
+}
+
+async function testSlackToken(token: string): Promise<ConnectionTestResult> {
+    try {
+        const resp = await fetch('https://slack.com/api/auth.test', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!resp.ok) return { ok: false, error: `Slack API HTTP ${resp.status}` };
+        const data = (await resp.json()) as { ok: boolean; error?: string; user?: string; team?: string };
+        if (!data.ok) return { ok: false, error: `Slack auth failed: ${data.error ?? 'unknown'}` };
+        return { ok: true, message: `Connected as ${data.user} in ${data.team}` };
+    } catch (err) {
+        return { ok: false, error: `Connection failed: ${err instanceof Error ? err.message : String(err)}` };
+    }
+}
+
+async function testTelegramToken(token: string): Promise<ConnectionTestResult> {
+    try {
+        const resp = await fetch(`https://api.telegram.org/bot${token}/getMe`);
+        if (!resp.ok) return { ok: false, error: `Telegram API ${resp.status}: unauthorized` };
+        const data = (await resp.json()) as {
+            ok: boolean;
+            description?: string;
+            result?: { username?: string; first_name?: string };
+        };
+        if (!data.ok) return { ok: false, error: `Telegram auth failed: ${data.description ?? 'unknown'}` };
+        const name = data.result?.username ?? data.result?.first_name ?? 'unknown';
+        return { ok: true, message: `Connected as @${name}` };
+    } catch (err) {
+        // Sanitize: Telegram embeds the token in the URL path
+        const msg = err instanceof Error ? err.message.replace(/bot[^/]+\//g, 'bot[REDACTED]/') : String(err);
+        return { ok: false, error: `Connection failed: ${msg}` };
+    }
+}
+
+/**
+ * Run a connection test with a spinner. Returns the success message or null on failure.
+ */
+async function runConnectionTest(
+    testFn: (token: string) => Promise<ConnectionTestResult>,
+    token: string,
+    platform: string,
+): Promise<string | null> {
+    const s = p.spinner();
+    s.start(`Testing ${platform} connection...`);
+    const result = await testFn(token);
+    if (!result.ok) {
+        s.stop(`${platform}: ${result.error}`);
+        return null;
+    }
+    s.stop(result.message);
+    return result.message;
+}
+
+interface TokenPromptConfig {
+    message: string;
+    validate?: (v: string | undefined) => string | undefined;
+}
+
+/**
+ * Prompt for a token, test the connection, and retry on failure.
+ * Returns the validated token, or empty string if skipped.
+ */
+async function collectAndTestToken(
+    prompt: TokenPromptConfig,
+    testFn: (token: string) => Promise<ConnectionTestResult>,
+    platform: string,
+): Promise<string> {
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+        const token = await p.password({
+            message: prompt.message,
+            mask: '*',
+            validate: prompt.validate,
+        });
+        exitIfCancelled(token);
+
+        if (!token) return '';
+
+        const ok = await runConnectionTest(testFn, token, platform);
+        if (ok) return token;
+
+        const action = await p.select({
+            message: `${platform} connection test failed. What would you like to do?`,
+            options: [
+                { value: 'retry', label: 'Re-enter token' },
+                { value: 'skip', label: 'Skip', hint: 'Save current token anyway' },
+            ],
+        });
+        exitIfCancelled(action);
+
+        if (action === 'skip') return token;
+        // action === 'retry' → loop continues
+    }
+}
+
+/* ------------------------------------------------------------------ */
 /*  Step: Discord config                                              */
 /* ------------------------------------------------------------------ */
 
-async function stepDiscord(): Promise<void> {
+async function stepDiscord(): Promise<boolean> {
     const enable = await p.confirm({
         message: 'Enable Discord integration?',
         initialValue: false,
     });
     exitIfCancelled(enable);
-    if (!enable) return;
+    if (!enable) return false;
 
     p.note(
         [
             '1. Create a Bot at https://discord.com/developers/applications',
-            "2. Copy the Bot Token (you'll enter it in the secrets step)",
+            '2. Copy the Bot Token',
             '3. Enable Privileged Gateway Intents:',
             '   - MESSAGE CONTENT INTENT',
             '   - SERVER MEMBERS INTENT',
@@ -99,8 +213,19 @@ async function stepDiscord(): Promise<void> {
         'Discord Bot Setup',
     );
 
-    patchConfigFile({ channels: { discord: { enabled: true } } });
-    p.log.success('Discord integration enabled.');
+    const token = await collectAndTestToken({ message: 'Discord Bot Token' }, testDiscordToken, 'Discord');
+
+    if (token) {
+        await vault.set('discord-token', token);
+        patchConfigFile({
+            channels: { discord: { enabled: true, token: `${VAULT_REF_PREFIX}discord-token` } },
+        });
+        p.log.success('Discord: enabled, token saved to vault.');
+    } else {
+        patchConfigFile({ channels: { discord: { enabled: true } } });
+        p.log.warn('Discord: enabled without token. Run `geminiclaw setup --step discord` to add it later.');
+    }
+    return true;
 }
 
 /** Parse a "platform:channelId" value, splitting only on the first colon. */
@@ -110,12 +235,22 @@ function parseHomeValue(value: string): { channel: string; channelId: string } {
     return { channel: value.slice(0, idx), channelId: value.slice(idx + 1) };
 }
 
+interface EnabledAdapters {
+    discord?: boolean;
+    slack?: boolean;
+    telegram?: boolean;
+}
+
 /**
  * Unified home channel selection. The home channel is the agent's primary
  * destination for bootstrap greetings, heartbeat results, and cron fallback.
  * Home is mandatory — if only one channel is available, it is auto-selected.
+ *
+ * When called from the full wizard, `enabled` restricts channel loading to
+ * only the adapters the user enabled in this session. When called standalone
+ * (`--step home`), all enabled adapters with tokens are loaded.
  */
-async function stepHome(): Promise<void> {
+async function stepHome(enabled?: EnabledAdapters): Promise<void> {
     const config = loadConfig();
 
     interface HomeOption {
@@ -125,8 +260,11 @@ async function stepHome(): Promise<void> {
     }
     const allOptions: HomeOption[] = [];
 
+    const shouldLoad = (adapter: keyof EnabledAdapters, configEnabled: boolean): boolean =>
+        enabled ? !!enabled[adapter] && configEnabled : configEnabled;
+
     // --- Discord ---
-    if (config.channels.discord.enabled && config.channels.discord.token) {
+    if (shouldLoad('discord', config.channels.discord.enabled) && config.channels.discord.token) {
         const s = p.spinner();
         s.start('Fetching Discord channels...');
         const channels = await fetchDiscordChannels(config.channels.discord.token);
@@ -141,7 +279,7 @@ async function stepHome(): Promise<void> {
     }
 
     // --- Slack ---
-    if (config.channels.slack.enabled && config.channels.slack.token) {
+    if (shouldLoad('slack', config.channels.slack.enabled) && config.channels.slack.token) {
         const s = p.spinner();
         s.start('Fetching Slack channels...');
         const channels = await fetchSlackChannels(config.channels.slack.token);
@@ -155,7 +293,7 @@ async function stepHome(): Promise<void> {
     }
 
     // --- Telegram ---
-    if (config.channels.telegram.enabled && config.channels.telegram.botToken) {
+    if (shouldLoad('telegram', config.channels.telegram.enabled) && config.channels.telegram.botToken) {
         const s = p.spinner();
         s.start('Fetching Telegram chats...');
         const chats = await fetchTelegramChats(config.channels.telegram.botToken);
@@ -257,22 +395,21 @@ async function stepHome(): Promise<void> {
 /*  Step: Slack config                                                */
 /* ------------------------------------------------------------------ */
 
-async function stepSlack(): Promise<void> {
+async function stepSlack(): Promise<boolean> {
     const enable = await p.confirm({
         message: 'Enable Slack integration?',
         initialValue: false,
     });
     exitIfCancelled(enable);
-    if (!enable) return;
+    if (!enable) return false;
 
     p.note(
         [
             '1. Create an App at https://api.slack.com/apps',
-            "2. Copy the Bot Token (xoxb-...) — you'll enter it next",
-            '3. Copy the Signing Secret from Basic Information → App Credentials',
-            '4. Enable Event Subscriptions and subscribe to:',
+            '2. Copy the Bot Token (xoxb-...) and Signing Secret',
+            '3. Enable Event Subscriptions and subscribe to:',
             '   app_mention, message.channels, message.groups, message.im',
-            '5. Add Bot Token Scopes under OAuth & Permissions:',
+            '4. Add Bot Token Scopes under OAuth & Permissions:',
             '   chat:write, channels:history, channels:read, reactions:write,',
             '   app_mentions:read, im:history, files:read, files:write',
             '',
@@ -281,21 +418,54 @@ async function stepSlack(): Promise<void> {
         'Slack App Setup',
     );
 
-    patchConfigFile({ channels: { slack: { enabled: true } } });
-    p.log.success('Slack integration enabled.');
+    const token = await collectAndTestToken(
+        {
+            message: 'Slack Bot Token (xoxb-...)',
+            validate: (v) => {
+                if (!v) return undefined;
+                return v.startsWith('xoxb-') ? undefined : 'Token must start with xoxb-';
+            },
+        },
+        testSlackToken,
+        'Slack',
+    );
+
+    if (!token) {
+        patchConfigFile({ channels: { slack: { enabled: true } } });
+        p.log.warn('Slack: enabled without credentials. Run `geminiclaw setup --step slack` to add them later.');
+        return true;
+    }
+
+    const signingSecret = await p.password({
+        message: 'Slack Signing Secret',
+        mask: '*',
+    });
+    exitIfCancelled(signingSecret);
+
+    await vault.set('slack-bot-token', token);
+    const patch: Record<string, unknown> = { enabled: true, token: `${VAULT_REF_PREFIX}slack-bot-token` };
+
+    if (signingSecret) {
+        await vault.set('slack-signing-secret', signingSecret);
+        patch.signingSecret = `${VAULT_REF_PREFIX}slack-signing-secret`;
+    }
+
+    patchConfigFile({ channels: { slack: patch } });
+    p.log.success('Slack: enabled, credentials saved to vault.');
+    return true;
 }
 
 /* ------------------------------------------------------------------ */
 /*  Step: Telegram config                                             */
 /* ------------------------------------------------------------------ */
 
-async function stepTelegram(): Promise<void> {
+async function stepTelegram(): Promise<boolean> {
     const enable = await p.confirm({
         message: 'Enable Telegram integration?',
         initialValue: false,
     });
     exitIfCancelled(enable);
-    if (!enable) return;
+    if (!enable) return false;
 
     p.note(
         [
@@ -307,8 +477,19 @@ async function stepTelegram(): Promise<void> {
         'Telegram Bot Setup',
     );
 
-    patchConfigFile({ channels: { telegram: { enabled: true } } });
-    p.log.success('Telegram integration enabled.');
+    const token = await collectAndTestToken({ message: 'Telegram Bot Token' }, testTelegramToken, 'Telegram');
+
+    if (token) {
+        await vault.set('telegram-bot-token', token);
+        patchConfigFile({
+            channels: { telegram: { enabled: true, botToken: `${VAULT_REF_PREFIX}telegram-bot-token` } },
+        });
+        p.log.success('Telegram: enabled, token saved to vault.');
+    } else {
+        patchConfigFile({ channels: { telegram: { enabled: true } } });
+        p.log.warn('Telegram: enabled without token. Run `geminiclaw setup --step telegram` to add it later.');
+    }
+    return true;
 }
 
 /* ------------------------------------------------------------------ */
@@ -767,52 +948,44 @@ function checkGeminiCli(): void {
     p.log.success(`Gemini CLI ${versionMatch[1]}`);
 }
 
-export async function runSetupWizard(config: Config, workspacePath: string): Promise<void> {
+export async function runSetupWizard(workspacePath: string): Promise<void> {
     p.intro('GeminiClaw Setup');
 
     // Preflight: check Gemini CLI version
     checkGeminiCli();
 
-    // Step 1: Initialize workspace
-    const s = p.spinner();
-    s.start('Initializing workspace...');
-    await initializeWorkspace(config);
-    s.stop('Workspace initialized.');
-
-    // Step 2: Language preference
+    // Step 1: Language preference
     await stepLanguage();
 
     // SOUL.md is now generated during bootstrap (first agent conversation)
 
-    // Step 3: Discord
-    await stepDiscord();
+    // Step 2: Discord
+    const discordEnabled = await stepDiscord();
 
-    // Step 4: Slack
-    await stepSlack();
+    // Step 3: Slack
+    const slackEnabled = await stepSlack();
 
-    // Step 5: Telegram
-    await stepTelegram();
+    // Step 4: Telegram
+    const telegramEnabled = await stepTelegram();
 
-    // Step 6: Google Workspace
+    // Step 5: Google Workspace
     await stepGoogle();
 
-    // Step 7: Timezone
+    // Step 6: Timezone
     await stepTimezone();
 
-    // Step 8: Secrets
+    // Step 7: Home channel selection (only for adapters enabled in this session)
     if (process.stdin.isTTY) {
-        await collectSecrets();
+        await stepHome({ discord: discordEnabled, slack: slackEnabled, telegram: telegramEnabled });
     }
 
-    // Step 9: Home channel selection (mandatory, requires tokens from step 8)
-    if (process.stdin.isTTY) {
-        await stepHome();
-    }
-
-    // Re-initialize to register MCP servers with all collected settings
-    // (gogAccount, channels, etc. written during the wizard steps above).
+    // Step 8: Initialize workspace, register MCP servers, download memory search models.
+    // This is the heaviest step — QMD model download (~500MB) runs on first setup.
     const freshConfig = loadConfig();
+    const initSpinner = p.spinner();
+    initSpinner.start('Setting up workspace and MCP servers...');
     await initializeWorkspace(freshConfig);
+    initSpinner.stop('Workspace initialized, MCP servers registered, memory search models ready.');
 
     // Summary
     printSummary(freshConfig, workspacePath);
@@ -824,12 +997,12 @@ export async function runSetupWizard(config: Config, workspacePath: string): Pro
 }
 
 /** Available step names for `--step`. */
-const STEP_RUNNERS: Record<string, () => Promise<void>> = {
+const STEP_RUNNERS: Record<string, () => Promise<unknown>> = {
     language: stepLanguage,
     discord: stepDiscord,
     slack: stepSlack,
     telegram: stepTelegram,
-    home: stepHome,
+    home: () => stepHome(),
     gog: stepGoogle,
     timezone: stepTimezone,
     secrets: collectSecrets,
@@ -895,6 +1068,6 @@ export function registerSetupCommand(program: Command): void {
             }
 
             const workspacePath = getWorkspacePath(config);
-            await runSetupWizard(config, workspacePath);
+            await runSetupWizard(workspacePath);
         });
 }

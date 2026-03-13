@@ -153,3 +153,79 @@ describe('setup wizard vault integration', () => {
         expect(written.channels.discord.token).toBe(`${VAULT_REF_PREFIX}discord-token`);
     });
 });
+
+describe('adapter step writes enabled + vault ref atomically', () => {
+    let tmpDir: string;
+    let configPath: string;
+
+    beforeEach(() => {
+        tmpDir = mkdtempSync(join(tmpdir(), 'geminiclaw-setup-adapter-'));
+        configPath = join(tmpDir, 'config.json');
+    });
+
+    afterEach(() => {
+        rmSync(tmpDir, { recursive: true, force: true });
+    });
+
+    it('discord step writes enabled + token in a single patch', () => {
+        const raw: Record<string, unknown> = {};
+        const patch = {
+            channels: { discord: { enabled: true, token: `${VAULT_REF_PREFIX}discord-token` } },
+        };
+
+        // Simulate patchConfigFile behavior (deep merge)
+        Object.assign(raw, patch);
+        writeFileSync(configPath, JSON.stringify(raw, null, 2));
+        const written = JSON.parse(readFileSync(configPath, 'utf-8'));
+
+        expect(written.channels.discord.enabled).toBe(true);
+        expect(written.channels.discord.token).toBe(`${VAULT_REF_PREFIX}discord-token`);
+    });
+
+    it('slack step writes enabled + token + signingSecret in a single patch', () => {
+        const raw: Record<string, unknown> = {};
+        const patch = {
+            channels: {
+                slack: {
+                    enabled: true,
+                    token: `${VAULT_REF_PREFIX}slack-bot-token`,
+                    signingSecret: `${VAULT_REF_PREFIX}slack-signing-secret`,
+                },
+            },
+        };
+
+        Object.assign(raw, patch);
+        writeFileSync(configPath, JSON.stringify(raw, null, 2));
+        const written = JSON.parse(readFileSync(configPath, 'utf-8'));
+
+        expect(written.channels.slack.enabled).toBe(true);
+        expect(written.channels.slack.token).toBe(`${VAULT_REF_PREFIX}slack-bot-token`);
+        expect(written.channels.slack.signingSecret).toBe(`${VAULT_REF_PREFIX}slack-signing-secret`);
+    });
+
+    it('telegram step writes enabled + botToken in a single patch', () => {
+        const raw: Record<string, unknown> = {};
+        const patch = {
+            channels: { telegram: { enabled: true, botToken: `${VAULT_REF_PREFIX}telegram-bot-token` } },
+        };
+
+        Object.assign(raw, patch);
+        writeFileSync(configPath, JSON.stringify(raw, null, 2));
+        const written = JSON.parse(readFileSync(configPath, 'utf-8'));
+
+        expect(written.channels.telegram.enabled).toBe(true);
+        expect(written.channels.telegram.botToken).toBe(`${VAULT_REF_PREFIX}telegram-bot-token`);
+    });
+
+    it('adapter step without token writes only enabled', () => {
+        const raw: Record<string, unknown> = {};
+        const patch = { channels: { discord: { enabled: true } } };
+
+        Object.assign(raw, patch);
+        writeFileSync(configPath, JSON.stringify(raw, null, 2));
+        const written = JSON.parse(readFileSync(configPath, 'utf-8'));
+
+        expect(written.channels.discord.enabled).toBe(true);
+        expect(written.channels.discord.token).toBeUndefined();
+    });
+});

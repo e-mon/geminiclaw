@@ -4,8 +4,7 @@
 
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 import type { Command } from 'commander';
 import {
     CONFIG_PATH,
@@ -19,6 +18,7 @@ import {
     patchConfigFile,
     saveGeminiclawSettings,
 } from '../../config.js';
+import { resolveQmdEntrypoint } from '../../memory/qmd.js';
 import { Workspace } from '../../workspace.js';
 
 /**
@@ -50,11 +50,6 @@ export async function initializeWorkspace(config: Config): Promise<void> {
         env: { TIMEZONE: tz },
     };
 
-    // QMD memory search — served via host HTTP daemon (started in serve.ts).
-    // Resolve qmdEntrypoint for `qmd pull` / `qmd collection add` below.
-    const require = createRequire(import.meta.url);
-    const qmdDir = dirname(require.resolve('@tobilu/qmd/package.json'));
-    const qmdEntrypoint = join(qmdDir, 'dist', 'qmd.js');
     // Clean up legacy memory MCP server
     delete gcSettings.mcpServers['geminiclaw-memory'];
 
@@ -92,35 +87,6 @@ export async function initializeWorkspace(config: Config): Promise<void> {
 
     saveGeminiclawSettings(gcSettings);
 
-    // Pre-download QMD models (~500MB on first run) to avoid timeout on first search
-    try {
-        execFileSync('node', [qmdEntrypoint, 'pull'], {
-            stdio: 'inherit',
-            timeout: 300_000,
-        });
-    } catch {}
-
-    // Register QMD collection pointing directly at workspace/memory/
-    const memoryDir = join(workspacePath, 'memory');
-    try {
-        execFileSync('node', [qmdEntrypoint, 'collection', 'remove', 'geminiclaw'], {
-            stdio: 'ignore',
-            timeout: 10_000,
-        });
-    } catch {
-        // Collection may not exist yet — ignore
-    }
-    try {
-        execFileSync(
-            'node',
-            [qmdEntrypoint, 'collection', 'add', memoryDir, '--name', 'geminiclaw', '--mask', '**/*.md'],
-            {
-                stdio: 'inherit',
-                timeout: 30_000,
-            },
-        );
-    } catch {}
-
     // Clean up geminiclaw-related entries from ~/.gemini/settings.json
     const geminiSettingsPath = join(process.env.HOME ?? '~', '.gemini', 'settings.json');
     if (existsSync(geminiSettingsPath)) {
@@ -140,6 +106,44 @@ export async function initializeWorkspace(config: Config): Promise<void> {
         } catch {
             /* ignore */
         }
+    }
+
+    // Download QMD models and register memory collection (last — heaviest step)
+    setupQmdIndex(workspacePath);
+}
+
+/** Download QMD models and register the memory collection. */
+function setupQmdIndex(workspacePath: string): void {
+    const qmdEntrypoint = resolveQmdEntrypoint();
+
+    try {
+        execFileSync('node', [qmdEntrypoint, 'pull'], {
+            stdio: 'pipe',
+            timeout: 300_000,
+        });
+    } catch {}
+
+    const memoryDir = join(workspacePath, 'memory');
+    try {
+        execFileSync('node', [qmdEntrypoint, 'collection', 'remove', 'geminiclaw'], {
+            stdio: 'ignore',
+            timeout: 10_000,
+        });
+    } catch {
+        // Collection may not exist yet
+    }
+    try {
+        execFileSync(
+            'node',
+            [qmdEntrypoint, 'collection', 'add', memoryDir, '--name', 'geminiclaw', '--mask', '**/*.md'],
+            {
+                stdio: 'pipe',
+                timeout: 30_000,
+            },
+        );
+    } catch (err) {
+        // Non-fatal but surface for diagnosis — QMD memory search won't work until next init
+        console.warn('Warning: QMD collection registration failed.', err instanceof Error ? err.message : err);
     }
 }
 
