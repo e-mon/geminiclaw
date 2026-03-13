@@ -128,7 +128,7 @@ export function registerRunCommand(program: Command): void {
                 const useInteractive = useTui && !prompt;
 
                 if (useInteractive && !config.setupCompleted) {
-                    process.stderr.write('初回セットアップが未完了です。セットアップを開始します...\n');
+                    process.stderr.write('Initial setup is not complete. Starting setup...\n');
                     const { runSetupWizard } = await import('./setup.js');
                     await runSetupWizard(config, workspacePath);
                 }

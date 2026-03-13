@@ -1,12 +1,12 @@
 ---
 name: translate-preview
-description: Translate a web page while preserving its original DOM structure, CSS, and images. Generates a self-contained bilingual preview HTML with toggle controls. Use this skill whenever the user shares a URL and asks for translation, translated preview, bilingual view, or when the channel topic instructs to use translate-preview. Also triggers on Japanese phrases like "翻訳プレビュー", "翻訳して", "日本語で読みたい". Do NOT write your own translation scripts — always use this skill's reference files.
+description: Translate a web page while preserving its original DOM structure, CSS, and images. Generates a self-contained bilingual preview HTML with toggle controls. Use this skill whenever the user shares a URL and asks for translation, translated preview, bilingual view, or when the channel topic instructs to use translate-preview. Do NOT write your own translation scripts — always use this skill's reference files.
 enabled: true
 ---
 
 # Translate Preview
 
-Translate a web page into a bilingual preview HTML with toggle controls (訳文/対訳/原文).
+Translate a web page into a bilingual preview HTML with toggle controls (Translated/Both/Original).
 
 ## Flow
 
@@ -27,8 +27,8 @@ Translate all blocks at once to preserve cross-paragraph context. Save to `runs/
 **Output format**: Array of objects matching blocks.json structure with `translatedText` added:
 ```json
 [
-  {"id": 0, "type": "paragraph", "translatedText": "翻訳されたテキスト"},
-  {"id": 1, "type": "heading", "translatedText": "見出しの翻訳"}
+  {"id": 0, "type": "paragraph", "translatedText": "Translated text"},
+  {"id": 1, "type": "heading", "translatedText": "Translated heading"}
 ]
 ```
 

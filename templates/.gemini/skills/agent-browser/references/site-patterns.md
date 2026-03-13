@@ -6,7 +6,7 @@ Patterns for sites with known characteristics. **This file is auto-updated** by 
 - [Amazon](#amazon-amazoncojp--amazoncoma)
 - [General Patterns by Site Type](#general-patterns-by-site-type)
 
-> 5〜6サイトを超えたら site-patterns/ ディレクトリに分割を検討する。
+> Consider splitting into a site-patterns/ directory once this exceeds 5-6 sites.
 
 ---
 
@@ -60,22 +60,22 @@ Prefer clicking **sidebar filters** over constructing URLs manually:
 agent-browser open "https://www.amazon.co.jp/s?k=<query>&i=<category>"
 agent-browser wait 2000
 # Find and click filters from the snapshot instead of URL hacking
-agent-browser snapshot -i | grep -E "過去7日|過去30日|カテゴリー|絞り込み"
+agent-browser snapshot -i | grep -E "Past 7 days|Past 30 days|Category|Filter"
 agent-browser click @eN   # click the filter
 ```
 
 Useful URL parameters when building search URLs:
-- `i=digital-text` — Kindleストア
-- `i=stripbooks` — 本・紙書籍
-- `s=date-desc-rank` — 発売日の新しい順
-- `s=review-rank` — レビュー評価順
-- `page=N` — ページ番号
+- `i=digital-text` — Kindle Store
+- `i=stripbooks` — Books (print)
+- `s=date-desc-rank` — Newest release date first
+- `s=review-rank` — Review rating order
+- `page=N` — Page number
 
 ### Extracting Search Results
 
 ```bash
 # Efficient: grep snapshot for titles and status
-agent-browser snapshot -i | grep -E "link.*コミック|link.*文庫|heading.*件"
+agent-browser snapshot -i | grep -E "link.*Comic|link.*Paperback|heading.*results"
 
 # For structured data (title + price + status across many cards):
 agent-browser eval --stdin <<'EOF'
@@ -85,10 +85,10 @@ document.querySelectorAll('[data-component-type="s-search-result"]').forEach(fun
   var price = el.querySelector('.a-price .a-offscreen') ? el.querySelector('.a-price .a-offscreen').textContent.trim() : '';
   var asin  = el.getAttribute('data-asin') || '';
   var text  = el.innerText;
-  var dateMatch = text.match(/202\d年\d+月\d+日/);
-  var available = text.indexOf('今すぐ買う') !== -1 || text.indexOf('すぐに購読可能') !== -1;
-  var preorder  = text.indexOf('発売予定日') !== -1;
-  items.push(title.substring(0,60) + '|||' + price + '|||' + (dateMatch ? dateMatch[0] : '既発売') + '|||' + (preorder ? '予約' : available ? '購入可' : '?') + '|||' + asin);
+  var dateMatch = text.match(/\w+ \d+, 202\d/) || text.match(/202\d年\d+月\d+日/);
+  var available = text.indexOf('Buy now') !== -1 || text.indexOf('Available instantly') !== -1;
+  var preorder  = text.indexOf('Pre-order') !== -1;
+  items.push(title.substring(0,60) + '|||' + price + '|||' + (dateMatch ? dateMatch[0] : 'Released') + '|||' + (preorder ? 'Pre-order' : available ? 'Available' : '?') + '|||' + asin);
 });
 items.join('\n');
 EOF
@@ -111,7 +111,7 @@ agent-browser eval 'document.querySelector(".a-price .a-offscreen")?.textContent
 
 ```bash
 # Find and click "Next page" from snapshot
-agent-browser snapshot -i | grep -E "次のページ|次へ|button.*ページ"
+agent-browser snapshot -i | grep -E "Next page|Next|button.*page"
 agent-browser click @eN
 agent-browser wait 2000
 ```
@@ -125,7 +125,7 @@ agent-browser wait 2000
 - Avoid `networkidle` — they load ads/tracking continuously
 - Look for sidebar date/category filters before constructing filter URLs
 - Product cards usually share a common CSS class — use `eval` to batch-extract
-- Pagination: look for `次へ` / `next` button in snapshot
+- Pagination: look for `Next` / `next` button in snapshot
 
 ### News / Blog Sites
 

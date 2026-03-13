@@ -133,12 +133,12 @@ export class DebugOverlayComponent implements Component {
         const rows: string[] = [];
 
         // Title bar
-        const title = `  ${toolTitle.bold('Gemini CLI Live')}  ${mutedText('[Ctrl+D] 閉じる  [↑/↓] スクロール')}`;
+        const title = `  ${toolTitle.bold('Gemini CLI Live')}  ${mutedText('[Ctrl+D] Close  [↑/↓] Scroll')}`;
         rows.push(padToWidth(title, w));
         rows.push(padToWidth(borderDim('─'.repeat(w)), w));
 
         if (this.entries.length === 0) {
-            rows.push(padToWidth(mutedText('  Gemini CLIイベント待機中…'), w));
+            rows.push(padToWidth(mutedText('  Waiting for Gemini CLI events…'), w));
             rows.push(padToWidth(borderDim('─'.repeat(w)), w));
             return rows;
         }
@@ -165,8 +165,8 @@ export class DebugOverlayComponent implements Component {
         // Scroll indicator
         const atBottom = offset === 0;
         const scrollHint = atBottom
-            ? mutedText(`  最新 ${total} events`)
-            : chalk.yellow.dim(`  [${startIdx + 1}–${endIdx}/${total}] ↓ 最新へ`);
+            ? mutedText(`  Latest ${total} events`)
+            : chalk.yellow.dim(`  [${startIdx + 1}–${endIdx}/${total}] ↓ To latest`);
         rows.push(padToWidth(borderDim('─'.repeat(w)), w));
         rows.push(padToWidth(scrollHint, w));
 

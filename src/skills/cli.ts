@@ -1,12 +1,12 @@
 /**
- * cli.ts — `geminiclaw skill` サブコマンド群。
+ * cli.ts — `geminiclaw skill` subcommands.
  *
- * skill list / enable / disable / remove / scan / install / search を提供する。
- * install / search / remove は bunx skills CLI に委譲する。
+ * Provides skill list / enable / disable / remove / scan / install / search.
+ * install / search / remove are delegated to bunx skills CLI.
  *
- * セキュリティ:
- *   - install 時に staging dir でスキャン → danger はブロック、warning はユーザー確認
- *   - enable/disable はリネーム方式（Gemini CLI が enabled フィールドを無視するため）
+ * Security:
+ *   - On install, scan in a staging dir: danger is blocked, warning prompts user confirmation
+ *   - enable/disable uses rename approach (Gemini CLI ignores the enabled frontmatter field)
  */
 
 import { spawn } from 'node:child_process';
@@ -44,7 +44,7 @@ function printFindings(findings: SecurityFinding[]): void {
     }
 }
 
-/** ユーザーに Y/N 確認を求める。非 TTY では安全側に倒す（reject）。 */
+/** Prompt the user for Y/N confirmation. Defaults to reject (safe side) on non-TTY. */
 function askConfirmation(message: string): Promise<boolean> {
     if (!process.stdin.isTTY) return Promise.resolve(false);
     return new Promise((resolve) => {
@@ -203,12 +203,12 @@ export function buildSkillCommand(): Command {
                     return;
                 }
 
-                // safe スキル: 既に workspace に移動済み
+                // Safe skills: already moved to workspace
                 for (const name of result.scanned) {
                     process.stdout.write(`  ${RISK_ICONS.safe} Installed: ${name}\n`);
                 }
 
-                // warned スキル: findings を表示してユーザー確認
+                // Warned skills: show findings and prompt user confirmation
                 if (result.warned.length > 0 && result._stagingDir) {
                     for (const name of result.warned) {
                         const report = result.reports[name];
@@ -225,7 +225,7 @@ export function buildSkillCommand(): Command {
                     }
                 }
 
-                // blocked スキル
+                // Blocked skills
                 for (const name of result.blocked) {
                     const report = result.reports[name];
                     process.stderr.write(`\n${RISK_ICONS.danger} Blocked: ${name}\n`);
@@ -236,7 +236,7 @@ export function buildSkillCommand(): Command {
                     process.stdout.write('\nUse --force to install blocked skills.\n');
                 }
 
-                // staging クリーンアップ
+                // Staging cleanup
                 if (result._stagingDir) {
                     cleanupStaging(result._stagingDir);
                 }

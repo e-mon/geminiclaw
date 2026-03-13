@@ -260,7 +260,7 @@ async function buildEventData(thread: Thread, message: Message): Promise<AgentRu
     const workspacePath = getWorkspacePath(config);
     const files = await downloadAttachments(message, sessionId, workspacePath);
 
-    // Fetch channel topic for per-channel behavior control (e.g. "日本語で応答")
+    // Fetch channel topic for per-channel behavior control (e.g. "respond in Japanese")
     const channelTopic = thread.isDM ? undefined : await fetchChannelTopic(thread);
 
     // Build channel conversation context (experimental)

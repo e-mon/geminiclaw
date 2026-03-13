@@ -1,17 +1,17 @@
 /**
- * scanner.ts — スキルのセキュリティスキャナー。
+ * scanner.ts — Security scanner for skills.
  *
- * 3層防御アーキテクチャ:
- *   層1: 決定論的静的パターンスキャン（riskLevel を決定する唯一の層）
- *   層2: LLM による補助分析（advisory のみ、riskLevel を変更しない）
- *   層3: ランタイムサンドボックス（Seatbelt — scanner 外で実施）
+ * Three-layer defense architecture:
+ *   Layer 1: Deterministic static pattern scan (the only layer that determines riskLevel)
+ *   Layer 2: LLM-assisted analysis (advisory only, does not change riskLevel)
+ *   Layer 3: Runtime sandbox (Seatbelt — handled outside the scanner)
  *
- * 静的パターンは ClawHavoc (CVE-2026-25253), Skill-Inject (arXiv:2602.20156),
- * Cursor Unicode 攻撃, Claude Code 設定インジェクション (CVE-2025-59536) の
- * 実世界攻撃ベクターに基づく。
+ * Static patterns are based on real-world attack vectors from ClawHavoc (CVE-2026-25253),
+ * Skill-Inject (arXiv:2602.20156), Cursor Unicode attacks, and Claude Code config
+ * injection (CVE-2025-59536).
  *
- * LLM-as-judge は adversarial スキルに対して脆弱であることが学術的に実証されている
- * (Lakera, arXiv:2505.13348) ため、riskLevel の判定には使用しない。
+ * LLM-as-judge has been academically proven vulnerable to adversarial skills
+ * (Lakera, arXiv:2505.13348), so it is not used for riskLevel determination.
  */
 
 import { readdirSync, readFileSync, statSync } from 'node:fs';
@@ -26,7 +26,7 @@ interface PatternRule {
     severity: RiskLevel;
 }
 
-// ── DANGER: インストールをブロックするパターン ────────────────────
+// ── DANGER: Patterns that block installation ─────────────────────
 
 const DANGER_PATTERNS: PatternRule[] = [
     // Remote code execution chains
@@ -81,7 +81,7 @@ const DANGER_PATTERNS: PatternRule[] = [
     },
 ];
 
-// ── WARNING: ユーザー確認を促すパターン ──────────────────────────
+// ── WARNING: Patterns that prompt user confirmation ──────────────
 
 const WARNING_PATTERNS: PatternRule[] = [
     // External HTTP requests
@@ -143,8 +143,8 @@ const WARNING_PATTERNS: PatternRule[] = [
     },
 ];
 
-// ── SKILL.md プロンプトインジェクション検査パターン ───────────────
-// Skill-Inject (arXiv:2602.20156) + ClawHavoc + Cursor Unicode 攻撃に基づく
+// ── SKILL.md prompt injection detection patterns ─────────────────
+// Based on Skill-Inject (arXiv:2602.20156) + ClawHavoc + Cursor Unicode attacks
 
 const PROMPT_INJECTION_PATTERNS: PatternRule[] = [
     // Instruction override
@@ -222,7 +222,7 @@ const PROMPT_INJECTION_PATTERNS: PatternRule[] = [
     },
 ];
 
-// ── Unicode 難読化検出（Cursor ルールファイル攻撃に基づく） ────────
+// ── Unicode obfuscation detection (based on Cursor rule file attacks) ──
 
 const UNICODE_OBFUSCATION_PATTERNS: PatternRule[] = [
     {
@@ -240,7 +240,7 @@ const UNICODE_OBFUSCATION_PATTERNS: PatternRule[] = [
 ];
 
 /**
- * ディレクトリ内のテキストファイルを再帰的に収集する。
+ * Recursively collect text files within a directory.
  */
 function collectFiles(dir: string): string[] {
     const results: string[] = [];
@@ -257,13 +257,13 @@ function collectFiles(dir: string): string[] {
             }
         }
     } catch {
-        // ディレクトリ読み取り失敗は無視
+        // Ignore directory read failures
     }
     return results;
 }
 
 /**
- * 単一ファイルを静的パターンでスキャンする。
+ * Scan a single file against static patterns.
  */
 function scanFile(filePath: string, patterns: PatternRule[]): SecurityFinding[] {
     let content: string;
@@ -294,10 +294,10 @@ function scanFile(filePath: string, patterns: PatternRule[]): SecurityFinding[] 
 }
 
 /**
- * LLM による補助的セキュリティ分析。
+ * LLM-assisted supplementary security analysis.
  *
- * advisory のみを返す。riskLevel の判定には使用しない。
- * コンテンツは base64 エンコードして LLM に渡し、adversarial injection 耐性を向上させる。
+ * Returns advisory only. Not used for riskLevel determination.
+ * Content is base64-encoded before passing to the LLM to improve adversarial injection resistance.
  */
 async function scanWithLLM(files: string[], model: string, workspacePath: string): Promise<string> {
     const { spawnGeminiAcp } = await import('../agent/acp/runner.js');
@@ -311,11 +311,11 @@ async function scanWithLLM(files: string[], model: string, workspacePath: string
             if (combined.length + chunk.length > MAX_CONTENT_CHARS) break;
             combined += chunk;
         } catch {
-            // 読み取り失敗ファイルはスキップ
+            // Skip files that fail to read
         }
     }
 
-    // base64 エンコードで content を命令として解釈されにくくする
+    // Base64-encode content to prevent interpretation as instructions
     const encoded = Buffer.from(combined).toString('base64');
 
     const prompt = `You are a security auditor reviewing skill files for an AI agent system.
@@ -352,10 +352,10 @@ If no concerns, respond: {"concerns": [], "safe": true}`;
 }
 
 /**
- * スキルディレクトリをスキャンしてセキュリティレポートを返す。
+ * Scan a skill directory and return a security report.
  *
- * riskLevel は静的パターンスキャンのみで決定論的に決まる。
- * LLM レビューは advisory としてのみ提供され、riskLevel を変更しない。
+ * riskLevel is determined deterministically by static pattern scanning only.
+ * LLM review is provided as advisory only and does not change riskLevel.
  */
 export async function scanSkill(
     skillDir: string,
@@ -368,7 +368,7 @@ export async function scanSkill(
     for (const filePath of files) {
         const isSkillMd = filePath.endsWith('SKILL.md') || filePath.endsWith('SKILL.md.pending');
 
-        // SKILL.md はプロンプトインジェクション + Unicode 難読化検査も行う
+        // SKILL.md also undergoes prompt injection + Unicode obfuscation checks
         const patterns = isSkillMd
             ? [...DANGER_PATTERNS, ...WARNING_PATTERNS, ...PROMPT_INJECTION_PATTERNS, ...UNICODE_OBFUSCATION_PATTERNS]
             : [...DANGER_PATTERNS, ...WARNING_PATTERNS, ...UNICODE_OBFUSCATION_PATTERNS];
@@ -376,7 +376,7 @@ export async function scanSkill(
         findings.push(...scanFile(filePath, patterns));
     }
 
-    // 静的スキャンのみでリスクレベルを決定（決定論的）
+    // Determine risk level from static scan only (deterministic)
     let riskLevel: RiskLevel = 'safe';
     if (findings.some((f) => f.severity === 'danger')) {
         riskLevel = 'danger';
@@ -384,7 +384,7 @@ export async function scanSkill(
         riskLevel = 'warning';
     }
 
-    // LLM レビュー（advisory のみ — riskLevel を変更しない）
+    // LLM review (advisory only — does not change riskLevel)
     let llmAdvisory: string | undefined;
     if (!options?.skipLlm && options?.workspacePath) {
         llmAdvisory = await scanWithLLM(files, model, options.workspacePath);

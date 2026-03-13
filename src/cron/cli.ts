@@ -1,8 +1,8 @@
 /**
- * cron/cli.ts — `geminiclaw cron` サブコマンド群。
+ * cron/cli.ts — `geminiclaw cron` subcommands.
  *
- * cron list / add / rm を提供する。
- * jobs.json はソースオブトゥルースなので CLI は薄いラッパーに徹する。
+ * Provides cron list / add / rm commands.
+ * jobs.json is the source of truth; the CLI is a thin wrapper around the store.
  */
 
 import { randomUUID } from 'node:crypto';
@@ -13,12 +13,12 @@ import { addJob, computeInitialNextRun, editJob, listJobs, loadRunLog, removeJob
 import type { CronJob } from './types.js';
 
 /**
- * スケジュール文字列をパースする。
+ * Parse a schedule string into a schedule object.
  *
- * 対応フォーマット:
- *   - "every 30m" / "every 2h"  → EverySchedule
- *   - "at 2026-03-01T09:00:00"  → AtSchedule
- *   - "0 9 * * *"               → CronSchedule (5 フィールド)
+ * Supported formats:
+ *   - "every 30m" / "every 2h"  -> EverySchedule
+ *   - "at 2026-03-01T09:00:00"  -> AtSchedule
+ *   - "0 9 * * *"               -> CronSchedule (5 fields)
  */
 function parseSchedule(input: string): CronJob['schedule'] {
     const trimmed = input.trim();
@@ -68,7 +68,7 @@ function formatSchedule(job: CronJob): string {
 }
 
 /**
- * `geminiclaw cron` コマンドツリーを構築して返す。
+ * Build and return the `geminiclaw cron` command tree.
  */
 export function buildCronCommand(): Command {
     const cron = new Command('cron').description('Cron job management');
@@ -99,7 +99,7 @@ export function buildCronCommand(): Command {
                 const status = j.enabled ? 'enabled ' : 'disabled';
                 const tz = j.timezone || config.timezone || undefined;
                 const next = j.nextRunAt
-                    ? new Date(j.nextRunAt).toLocaleString('ja-JP', tz ? { timeZone: tz } : undefined)
+                    ? new Date(j.nextRunAt).toLocaleString('en-US', tz ? { timeZone: tz } : undefined)
                     : '—';
                 const sched = formatSchedule(j);
                 process.stdout.write(
@@ -336,7 +336,7 @@ export function buildCronCommand(): Command {
             const tz = config.timezone || undefined;
             process.stdout.write(`Run history for ${id} (last ${entries.length}):\n\n`);
             for (const e of entries) {
-                const time = new Date(e.timestamp).toLocaleString('ja-JP', tz ? { timeZone: tz } : undefined);
+                const time = new Date(e.timestamp).toLocaleString('en-US', tz ? { timeZone: tz } : undefined);
                 const reason = e.reason ? ` — ${e.reason}` : '';
                 process.stdout.write(`  ${time}  ${e.status}${reason}\n`);
             }

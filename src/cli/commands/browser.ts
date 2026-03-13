@@ -36,7 +36,7 @@ function abRun(args: string[]): boolean {
         const err = result.error as NodeJS.ErrnoException;
         if (err.code === 'ENOENT') {
             process.stderr.write(
-                'agent-browser が見つかりません。bun i -g agent-browser でインストールしてください。\n',
+                'agent-browser not found. Install it with: bun i -g agent-browser\n',
             );
         } else {
             process.stderr.write(`agent-browser error: ${err.message}\n`);
@@ -61,24 +61,24 @@ export function registerBrowserCommand(program: Command): void {
             spawnSync('agent-browser', ['--native', 'close'], { stdio: 'ignore' });
 
             process.stderr.write(`Opening ${targetUrl} in headed browser...\n`);
-            process.stderr.write('※ Google ログインは自動化検出制限により非対応です\n\n');
+            process.stderr.write('Note: Google login is not supported due to automation detection restrictions\n\n');
 
             if (!abRun(['--native', '--headed', 'open', targetUrl])) {
                 process.exit(1);
             }
 
-            await waitForEnter('ログインが完了したら Enter を押してください...');
+            await waitForEnter('Press Enter when login is complete...');
 
-            process.stderr.write('\n認証状態を保存中...\n');
+            process.stderr.write('\nSaving auth state...\n');
             if (!abRun(['state', 'save', BROWSER_STATE_PATH])) {
-                process.stderr.write('state save に失敗しました。\n');
+                process.stderr.write('Failed to save state.\n');
                 process.exit(1);
             }
 
             spawnSync('agent-browser', ['--native', 'close'], { stdio: 'ignore' });
 
-            process.stderr.write(`\n保存先: ${BROWSER_STATE_PATH}\n`);
-            process.stderr.write('次回のエージェント実行時に自動的に認証状態が復元されます。\n');
+            process.stderr.write(`\nSaved to: ${BROWSER_STATE_PATH}\n`);
+            process.stderr.write('Auth state will be automatically restored on the next agent run.\n');
         });
 
     browserCmd
@@ -101,10 +101,10 @@ export function registerBrowserCommand(program: Command): void {
         .description('Delete saved auth state')
         .action(() => {
             if (!existsSync(BROWSER_STATE_PATH)) {
-                process.stderr.write('認証状態ファイルが存在しません。\n');
+                process.stderr.write('Auth state file does not exist.\n');
                 return;
             }
             rmSync(BROWSER_STATE_PATH, { force: true });
-            process.stderr.write(`削除しました: ${BROWSER_STATE_PATH}\n`);
+            process.stderr.write(`Deleted: ${BROWSER_STATE_PATH}\n`);
         });
 }

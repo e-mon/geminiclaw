@@ -136,9 +136,9 @@ const TOOLS = [
 function formatSchedule(schedule: CronJob['schedule']): string {
     switch (schedule.type) {
         case 'at':
-            return `一回限り: ${schedule.datetime}`;
+            return `once: ${schedule.datetime}`;
         case 'every':
-            return `${schedule.intervalMin}分ごと`;
+            return `every ${schedule.intervalMin}min`;
         case 'cron':
             return `cron: ${schedule.expression}`;
     }
@@ -147,15 +147,15 @@ function formatSchedule(schedule: CronJob['schedule']): string {
 function formatJobSummary(job: CronJob): string {
     const lines = [
         `ID: ${job.id}`,
-        `名前: ${job.name}`,
-        `スケジュール: ${formatSchedule(job.schedule)}`,
-        `プロンプト: ${job.prompt.length > 200 ? `${job.prompt.substring(0, 200)}...` : job.prompt}`,
-        `タイムゾーン: ${job.timezone ?? '(デフォルト)'}`,
-        `モデル: ${job.model ?? '(デフォルト)'}`,
-        `次回実行: ${job.nextRunAt ?? '(未設定)'}`,
-        `配信先: ${job.reply ? `${job.reply.channel}:${job.reply.channelId}` : '(home)'}`,
-        `自動削除: ${job.deleteAfterRun != null ? (job.deleteAfterRun ? 'はい' : 'いいえ') : '(デフォルト)'}`,
-        `有効: ${job.enabled ? 'はい' : 'いいえ'}`,
+        `Name: ${job.name}`,
+        `Schedule: ${formatSchedule(job.schedule)}`,
+        `Prompt: ${job.prompt.length > 200 ? `${job.prompt.substring(0, 200)}...` : job.prompt}`,
+        `Timezone: ${job.timezone ?? '(default)'}`,
+        `Model: ${job.model ?? '(default)'}`,
+        `Next run: ${job.nextRunAt ?? '(not set)'}`,
+        `Delivery: ${job.reply ? `${job.reply.channel}:${job.reply.channelId}` : '(home)'}`,
+        `Auto-delete: ${job.deleteAfterRun != null ? (job.deleteAfterRun ? 'yes' : 'no') : '(default)'}`,
+        `Enabled: ${job.enabled ? 'yes' : 'no'}`,
     ];
     return lines.join('\n');
 }
@@ -216,7 +216,7 @@ export function createCronServer(workspace: string, timezone?: string): Server {
 
                 const summary = formatJobSummary(job);
                 return {
-                    content: [{ type: 'text' as const, text: `✅ ジョブを登録しました:\n\n${summary}` }],
+                    content: [{ type: 'text' as const, text: `✅ Job registered:\n\n${summary}` }],
                 };
             }
 
@@ -224,12 +224,12 @@ export function createCronServer(workspace: string, timezone?: string): Server {
                 const jobs = listJobs(workspace);
                 if (jobs.length === 0) {
                     return {
-                        content: [{ type: 'text' as const, text: '登録されたジョブはありません。' }],
+                        content: [{ type: 'text' as const, text: 'No registered jobs.' }],
                     };
                 }
                 const text = jobs.map((j) => formatJobSummary(j)).join('\n\n---\n\n');
                 return {
-                    content: [{ type: 'text' as const, text: `${jobs.length}件のジョブ:\n\n${text}` }],
+                    content: [{ type: 'text' as const, text: `${jobs.length} job(s):\n\n${text}` }],
                 };
             }
 
@@ -255,7 +255,7 @@ export function createCronServer(workspace: string, timezone?: string): Server {
                 );
 
                 return {
-                    content: [{ type: 'text' as const, text: `✅ ジョブ "${id}" を削除しました。` }],
+                    content: [{ type: 'text' as const, text: `✅ Job "${id}" removed.` }],
                 };
             }
 
@@ -309,7 +309,7 @@ export function createCronServer(workspace: string, timezone?: string): Server {
 
                 return {
                     content: [
-                        { type: 'text' as const, text: `✅ ジョブを更新しました:\n\n${formatJobSummary(updated)}` },
+                        { type: 'text' as const, text: `✅ Job updated:\n\n${formatJobSummary(updated)}` },
                     ],
                 };
             }
@@ -330,7 +330,7 @@ export function createCronServer(workspace: string, timezone?: string): Server {
                 try {
                     const config = loadConfig();
                     await fireCronJob(job, config, workspace);
-                    return { content: [{ type: 'text' as const, text: `🚀 ジョブ "${id}" を手動実行しました。` }] };
+                    return { content: [{ type: 'text' as const, text: `🚀 Job "${id}" fired manually.` }] };
                 } catch (err) {
                     return {
                         content: [
@@ -352,7 +352,7 @@ export function createCronServer(workspace: string, timezone?: string): Server {
                 const limit = typeof params.limit === 'number' ? params.limit : 20;
                 const entries = loadRunLog(workspace, id, limit);
                 if (entries.length === 0) {
-                    return { content: [{ type: 'text' as const, text: `ジョブ "${id}" の実行履歴はありません。` }] };
+                    return { content: [{ type: 'text' as const, text: `No run history for job "${id}".` }] };
                 }
                 const lines = entries.map((e) => {
                     const time = new Date(e.timestamp).toISOString();
@@ -361,7 +361,7 @@ export function createCronServer(workspace: string, timezone?: string): Server {
                 });
                 return {
                     content: [
-                        { type: 'text' as const, text: `実行履歴 (${entries.length}件):\n\n${lines.join('\n')}` },
+                        { type: 'text' as const, text: `Run history (${entries.length} entries):\n\n${lines.join('\n')}` },
                     ],
                 };
             }

@@ -44,16 +44,16 @@ class HintLine implements Component {
         let text: string;
         if (this.confirmClear) {
             text =
-                chalk.yellow('  チャット履歴を削除します。') +
+                chalk.yellow('  Clear chat history.') +
                 chalk.white.bold(' [Enter]') +
-                chalk.yellow(' 確認  ') +
+                chalk.yellow(' Confirm  ') +
                 chalk.white.bold('[Esc]') +
-                chalk.yellow(' キャンセル');
+                chalk.yellow(' Cancel');
         } else if (this.disabled) {
-            text = mutedText('  エージェント実行中…');
+            text = mutedText('  Agent running…');
         } else {
             text = mutedText(
-                '  [Shift+Enter] 改行  [Ctrl+L] クリア  [Ctrl+G] デバッグ  [Ctrl+M] MCP  [Ctrl+W] ファイル  [Ctrl+C] 終了',
+                '  [Shift+Enter] Newline  [Ctrl+L] Clear  [Ctrl+G] Debug  [Ctrl+M] MCP  [Ctrl+W] Files  [Ctrl+C] Quit',
             );
         }
         return [padToWidth(text, width)];

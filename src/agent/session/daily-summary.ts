@@ -149,8 +149,8 @@ export async function generateHeartbeatActivityLog(
         `# Heartbeat Activity — ${dateStr}`,
         '',
         '## Summary',
-        `- ${grouped.okCount}回 HEARTBEAT_OK`,
-        `- ${grouped.actions.length}回 アクション実行`,
+        `- ${grouped.okCount}x HEARTBEAT_OK`,
+        `- ${grouped.actions.length}x actions executed`,
         '',
         '## Activity Log',
         '',
@@ -255,19 +255,19 @@ export async function generateDailySummary(
     // Sessions section
     lines.push('## Sessions');
     if (sessions.length === 0) {
-        lines.push('（セッションなし）', '');
+        lines.push('(No sessions)', '');
     } else {
         for (const s of sessions) {
-            lines.push(`- ${s.trigger}: ${s.title}（${s.durationMin}分, ${s.tokens}トークン）`);
+            lines.push(`- ${s.trigger}: ${s.title} (${s.durationMin}min, ${s.tokens} tokens)`);
         }
         lines.push('');
     }
 
     // Heartbeat section
     lines.push('## Heartbeat');
-    lines.push(`- ${heartbeat.okCount}回 HEARTBEAT_OK`);
+    lines.push(`- ${heartbeat.okCount}x HEARTBEAT_OK`);
     if (heartbeat.actions.length > 0) {
-        lines.push(`- ${heartbeat.actions.length}回 アクション実行:`);
+        lines.push(`- ${heartbeat.actions.length}x actions executed:`);
         for (const action of heartbeat.actions) {
             const time = toLocalTime(action.timestamp, timezone);
             const tools = [...new Set(action.toolCalls.map((tc) => tc.name))].join(', ');
@@ -287,10 +287,10 @@ export async function generateDailySummary(
     // Cron Jobs section
     lines.push('## Cron Jobs');
     if (cronStats.jobs.length === 0) {
-        lines.push('（cronジョブなし）', '');
+        lines.push('(No cron jobs)', '');
     } else {
         for (const job of cronStats.jobs) {
-            const status = job.errors > 0 ? `${job.runs - job.errors}/${job.runs} ✓` : `${job.runs}回実行 ✓`;
+            const status = job.errors > 0 ? `${job.runs - job.errors}/${job.runs} ✓` : `${job.runs}x runs ✓`;
             lines.push(`- ${job.jobId}: ${status}`);
         }
         lines.push('');
@@ -562,9 +562,9 @@ async function summarizeHeartbeatActions(
         .join('\n\n');
 
     const prompt = [
-        '以下のハートビートアクション実行ログを、各エントリごとに「### HH:MM — カテゴリ」形式で要約してください。',
-        '各エントリは2-3文で、何を検知し何をしたかを簡潔に記述。',
-        'Markdown以外のメタ情報は出力しないでください。',
+        'Summarize the following heartbeat action execution logs, with each entry in "### HH:MM — Category" format.',
+        'Each entry should be 2-3 sentences, concisely describing what was detected and what action was taken.',
+        'Output only Markdown content — no meta-information.',
         '',
         entriesText,
     ].join('\n');
@@ -594,14 +594,14 @@ async function generateHighlights(
     const dataParts: string[] = [];
 
     if (sessions.length > 0) {
-        dataParts.push('セッション:');
+        dataParts.push('Sessions:');
         for (const s of sessions) {
-            dataParts.push(`- ${s.trigger}: ${s.title}（${s.durationMin}分）`);
+            dataParts.push(`- ${s.trigger}: ${s.title} (${s.durationMin}min)`);
         }
     }
 
     if (heartbeat.actions.length > 0) {
-        dataParts.push('ハートビートアクション:');
+        dataParts.push('Heartbeat Actions:');
         for (const a of heartbeat.actions) {
             const time = a.timestamp.substring(11, 16);
             dataParts.push(`- ${time}: ${a.responseText.substring(0, 200)}`);
@@ -609,14 +609,14 @@ async function generateHighlights(
     }
 
     if (cronStats.jobs.length > 0) {
-        dataParts.push('Cronジョブ:');
+        dataParts.push('Cron Jobs:');
         for (const j of cronStats.jobs) {
-            dataParts.push(`- ${j.jobId}: ${j.runs}回実行`);
+            dataParts.push(`- ${j.jobId}: ${j.runs}x runs`);
         }
     }
 
     if (dailyLogContent) {
-        dataParts.push('エージェントメモ（Daily Log）:');
+        dataParts.push('Agent Notes (Daily Log):');
         dataParts.push(dailyLogContent.substring(0, 2000));
     }
 
@@ -624,8 +624,8 @@ async function generateHighlights(
     if (dataParts.length === 0) return '';
 
     const prompt = [
-        '以下の1日のアクティビティデータから、1-3文の簡潔な日本語ハイライトを生成してください。',
-        '重要なイベントや成果を中心に。Markdown不要、プレーンテキストのみ。',
+        'From the following daily activity data, generate a concise highlight in 1-3 sentences.',
+        'Focus on important events and accomplishments. Plain text only — no Markdown.',
         '',
         dataParts.join('\n'),
     ].join('\n');
