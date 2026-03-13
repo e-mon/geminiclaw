@@ -4,8 +4,7 @@
 
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import type { Command } from 'commander';
 import {
     CONFIG_PATH,
@@ -19,6 +18,7 @@ import {
     patchConfigFile,
     saveGeminiclawSettings,
 } from '../../config.js';
+import { resolveQmdEntrypoint } from '../../memory/qmd.js';
 import { Workspace } from '../../workspace.js';
 
 /**
@@ -114,8 +114,7 @@ export async function initializeWorkspace(config: Config): Promise<void> {
 
 /** Download QMD models and register the memory collection. */
 function setupQmdIndex(workspacePath: string): void {
-    const qmdDir = dirname(dirname(fileURLToPath(import.meta.resolve('@tobilu/qmd'))));
-    const qmdEntrypoint = join(qmdDir, 'dist', 'qmd.js');
+    const qmdEntrypoint = resolveQmdEntrypoint();
 
     try {
         execFileSync('node', [qmdEntrypoint, 'pull'], {
@@ -142,7 +141,10 @@ function setupQmdIndex(workspacePath: string): void {
                 timeout: 30_000,
             },
         );
-    } catch {}
+    } catch (err) {
+        // Non-fatal but surface for diagnosis — QMD memory search won't work until next init
+        console.warn('Warning: QMD collection registration failed.', err instanceof Error ? err.message : err);
+    }
 }
 
 export function registerInitCommand(program: Command): void {

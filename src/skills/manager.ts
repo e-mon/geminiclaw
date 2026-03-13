@@ -255,7 +255,7 @@ export async function stageSkill(
 
         return { stagingDir, skillNames, stagingSkillsDir };
     } catch (err) {
-        rmSync(stagingDir, { recursive: true, force: true });
+        cleanupStaging(stagingDir);
         throw err;
     }
 }

@@ -200,6 +200,7 @@ export function buildSkillCommand(): Command {
                         return;
                     }
 
+                    let hasDanger = false;
                     for (const name of staged.skillNames) {
                         const skillDir = join(staged.stagingSkillsDir, name);
                         process.stdout.write(`\nScanning: ${name}${options.skipLlm ? ' (static only)' : ''}\n`);
@@ -211,7 +212,9 @@ export function buildSkillCommand(): Command {
                         });
 
                         printScanReport(name, report);
+                        if (report.riskLevel === 'danger') hasDanger = true;
                     }
+                    if (hasDanger) process.exit(2);
                 } catch (err) {
                     process.stderr.write(`Error: ${err instanceof Error ? err.message : String(err)}\n`);
                     process.exit(1);

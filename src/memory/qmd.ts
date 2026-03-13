@@ -15,9 +15,14 @@ const log = createLogger('qmd');
 
 let updating = false;
 
-/** Resolve the QMD CLI entrypoint via ESM module resolution. */
-function resolveQmdEntrypoint(): string {
-    // import.meta.resolve('.') → file:///…/dist/index.js, dirname twice → package root
+/**
+ * Resolve the QMD CLI entrypoint via ESM module resolution.
+ *
+ * import.meta.resolve('@tobilu/qmd') → file:///…/dist/index.js.
+ * dirname twice gives the package root, then we append dist/qmd.js.
+ * This depends on qmd's internal layout — update if it changes.
+ */
+export function resolveQmdEntrypoint(): string {
     const qmdDir = dirname(dirname(fileURLToPath(import.meta.resolve('@tobilu/qmd'))));
     return join(qmdDir, 'dist', 'qmd.js');
 }

@@ -76,44 +76,52 @@ async function stepLanguage(): Promise<void> {
 /*  Connection tests                                                  */
 /* ------------------------------------------------------------------ */
 
-async function testDiscordToken(token: string): Promise<string | null> {
+type ConnectionTestResult = { ok: true; message: string } | { ok: false; error: string };
+
+async function testDiscordToken(token: string): Promise<ConnectionTestResult> {
     try {
         const resp = await fetch('https://discord.com/api/v10/users/@me', {
             headers: { Authorization: `Bot ${token}` },
         });
-        if (!resp.ok) return `Discord API ${resp.status}: unauthorized`;
+        if (!resp.ok) return { ok: false, error: `Discord API ${resp.status}: unauthorized` };
         const data = (await resp.json()) as { username?: string; id?: string };
-        return data.username ? `Connected as ${data.username} (${data.id})` : null;
+        return { ok: true, message: `Connected as ${data.username} (${data.id})` };
     } catch (err) {
-        return `Connection failed: ${err instanceof Error ? err.message : String(err)}`;
+        return { ok: false, error: `Connection failed: ${err instanceof Error ? err.message : String(err)}` };
     }
 }
 
-async function testSlackToken(token: string): Promise<string | null> {
+async function testSlackToken(token: string): Promise<ConnectionTestResult> {
     try {
         const resp = await fetch('https://slack.com/api/auth.test', {
             method: 'POST',
             headers: { Authorization: `Bearer ${token}` },
         });
-        if (!resp.ok) return `Slack API HTTP ${resp.status}`;
+        if (!resp.ok) return { ok: false, error: `Slack API HTTP ${resp.status}` };
         const data = (await resp.json()) as { ok: boolean; error?: string; user?: string; team?: string };
-        if (!data.ok) return `Slack auth failed: ${data.error ?? 'unknown'}`;
-        return `Connected as ${data.user} in ${data.team}`;
+        if (!data.ok) return { ok: false, error: `Slack auth failed: ${data.error ?? 'unknown'}` };
+        return { ok: true, message: `Connected as ${data.user} in ${data.team}` };
     } catch (err) {
-        return `Connection failed: ${err instanceof Error ? err.message : String(err)}`;
+        return { ok: false, error: `Connection failed: ${err instanceof Error ? err.message : String(err)}` };
     }
 }
 
-async function testTelegramToken(token: string): Promise<string | null> {
+async function testTelegramToken(token: string): Promise<ConnectionTestResult> {
     try {
         const resp = await fetch(`https://api.telegram.org/bot${token}/getMe`);
-        if (!resp.ok) return `Telegram API ${resp.status}: unauthorized`;
-        const data = (await resp.json()) as { ok: boolean; result?: { username?: string; first_name?: string } };
-        if (!data.ok) return 'Telegram auth failed';
+        if (!resp.ok) return { ok: false, error: `Telegram API ${resp.status}: unauthorized` };
+        const data = (await resp.json()) as {
+            ok: boolean;
+            description?: string;
+            result?: { username?: string; first_name?: string };
+        };
+        if (!data.ok) return { ok: false, error: `Telegram auth failed: ${data.description ?? 'unknown'}` };
         const name = data.result?.username ?? data.result?.first_name ?? 'unknown';
-        return `Connected as @${name}`;
+        return { ok: true, message: `Connected as @${name}` };
     } catch (err) {
-        return `Connection failed: ${err instanceof Error ? err.message : String(err)}`;
+        // Sanitize: Telegram embeds the token in the URL path
+        const msg = err instanceof Error ? err.message.replace(/bot[^/]+\//g, 'bot[REDACTED]/') : String(err);
+        return { ok: false, error: `Connection failed: ${msg}` };
     }
 }
 
@@ -121,19 +129,19 @@ async function testTelegramToken(token: string): Promise<string | null> {
  * Run a connection test with a spinner. Returns the success message or null on failure.
  */
 async function runConnectionTest(
-    testFn: (token: string) => Promise<string | null>,
+    testFn: (token: string) => Promise<ConnectionTestResult>,
     token: string,
     platform: string,
 ): Promise<string | null> {
     const s = p.spinner();
     s.start(`Testing ${platform} connection...`);
     const result = await testFn(token);
-    if (result && !result.startsWith('Connected')) {
-        s.stop(`${platform}: ${result}`);
+    if (!result.ok) {
+        s.stop(`${platform}: ${result.error}`);
         return null;
     }
-    s.stop(result ?? `${platform}: connected.`);
-    return result;
+    s.stop(result.message);
+    return result.message;
 }
 
 interface TokenPromptConfig {
@@ -147,7 +155,7 @@ interface TokenPromptConfig {
  */
 async function collectAndTestToken(
     prompt: TokenPromptConfig,
-    testFn: (token: string) => Promise<string | null>,
+    testFn: (token: string) => Promise<ConnectionTestResult>,
     platform: string,
 ): Promise<string> {
     // eslint-disable-next-line no-constant-condition
@@ -422,30 +430,28 @@ async function stepSlack(): Promise<boolean> {
         'Slack',
     );
 
+    if (!token) {
+        patchConfigFile({ channels: { slack: { enabled: true } } });
+        p.log.warn('Slack: enabled without credentials. Run `geminiclaw setup --step slack` to add them later.');
+        return true;
+    }
+
     const signingSecret = await p.password({
         message: 'Slack Signing Secret',
         mask: '*',
     });
     exitIfCancelled(signingSecret);
 
-    const patch: Record<string, unknown> = { enabled: true };
-    const secrets: Array<{ key: string; value: string; configKey: string }> = [];
+    await vault.set('slack-bot-token', token);
+    const patch: Record<string, unknown> = { enabled: true, token: `${VAULT_REF_PREFIX}slack-bot-token` };
 
-    if (token) secrets.push({ key: 'slack-bot-token', value: token, configKey: 'token' });
-    if (signingSecret) secrets.push({ key: 'slack-signing-secret', value: signingSecret, configKey: 'signingSecret' });
-
-    for (const s of secrets) {
-        await vault.set(s.key, s.value);
-        patch[s.configKey] = `${VAULT_REF_PREFIX}${s.key}`;
+    if (signingSecret) {
+        await vault.set('slack-signing-secret', signingSecret);
+        patch.signingSecret = `${VAULT_REF_PREFIX}slack-signing-secret`;
     }
 
     patchConfigFile({ channels: { slack: patch } });
-
-    if (secrets.length > 0) {
-        p.log.success(`Slack: enabled, ${secrets.length} secret(s) saved to vault.`);
-    } else {
-        p.log.warn('Slack: enabled without credentials. Run `geminiclaw setup --step slack` to add them later.');
-    }
+    p.log.success('Slack: enabled, credentials saved to vault.');
     return true;
 }
 
