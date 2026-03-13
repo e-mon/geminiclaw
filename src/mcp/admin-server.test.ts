@@ -3,7 +3,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { classifyEffect } from './admin-server.js';
+import { classifyEffect, parseMessageUrl } from './admin-server.js';
 
 describe('classifyEffect', () => {
     const READ_COMMANDS: string[][] = [
@@ -53,5 +53,92 @@ describe('classifyEffect', () => {
 
     it('classifies unknown command as read', () => {
         expect(classifyEffect(['help'])).toBe('read');
+    });
+});
+
+describe('parseMessageUrl', () => {
+    // ── Discord ──────────────────────────────────────────────────
+
+    it('parses standard Discord message URL', () => {
+        const result = parseMessageUrl('https://discord.com/channels/111/222/333');
+        expect(result).toEqual({ platform: 'discord', guildId: '111', channelId: '222', messageId: '333' });
+    });
+
+    it('parses Discord PTB URL', () => {
+        const result = parseMessageUrl('https://ptb.discord.com/channels/111/222/333');
+        expect(result).toEqual({ platform: 'discord', guildId: '111', channelId: '222', messageId: '333' });
+    });
+
+    it('parses Discord canary URL', () => {
+        const result = parseMessageUrl('https://canary.discord.com/channels/111/222/333');
+        expect(result).toEqual({ platform: 'discord', guildId: '111', channelId: '222', messageId: '333' });
+    });
+
+    it('parses discordapp.com URL', () => {
+        const result = parseMessageUrl('https://discordapp.com/channels/111/222/333');
+        expect(result).toEqual({ platform: 'discord', guildId: '111', channelId: '222', messageId: '333' });
+    });
+
+    it('parses Discord URL with trailing slash', () => {
+        const result = parseMessageUrl('https://discord.com/channels/111/222/333/');
+        expect(result).toEqual({ platform: 'discord', guildId: '111', channelId: '222', messageId: '333' });
+    });
+
+    it('parses Discord URL with query params', () => {
+        const result = parseMessageUrl('https://discord.com/channels/111/222/333?foo=bar');
+        expect(result).toEqual({ platform: 'discord', guildId: '111', channelId: '222', messageId: '333' });
+    });
+
+    // ── Slack ────────────────────────────────────────────────────
+
+    it('parses standard Slack message URL', () => {
+        const result = parseMessageUrl('https://myworkspace.slack.com/archives/C12345678/p1234567890123456');
+        expect(result).toEqual({
+            platform: 'slack',
+            workspace: 'myworkspace',
+            channelId: 'C12345678',
+            messageTs: '1234567890.123456',
+        });
+    });
+
+    it('parses Slack URL with trailing slash', () => {
+        const result = parseMessageUrl('https://myworkspace.slack.com/archives/C12345678/p1234567890123456/');
+        expect(result).toEqual({
+            platform: 'slack',
+            workspace: 'myworkspace',
+            channelId: 'C12345678',
+            messageTs: '1234567890.123456',
+        });
+    });
+
+    it('parses Slack URL with query params (thread_ts)', () => {
+        const result = parseMessageUrl(
+            'https://myworkspace.slack.com/archives/C12345678/p1234567890123456?thread_ts=1234567890.000000',
+        );
+        expect(result).toEqual({
+            platform: 'slack',
+            workspace: 'myworkspace',
+            channelId: 'C12345678',
+            messageTs: '1234567890.123456',
+        });
+    });
+
+    // ── Invalid URLs ────────────────────────────────────────────
+
+    it('returns undefined for unrecognized URL', () => {
+        expect(parseMessageUrl('https://example.com/foo')).toBeUndefined();
+    });
+
+    it('returns undefined for Discord channel URL without message ID', () => {
+        expect(parseMessageUrl('https://discord.com/channels/111/222')).toBeUndefined();
+    });
+
+    it('returns undefined for empty string', () => {
+        expect(parseMessageUrl('')).toBeUndefined();
+    });
+
+    it('handles whitespace around URL', () => {
+        const result = parseMessageUrl('  https://discord.com/channels/111/222/333  ');
+        expect(result).toEqual({ platform: 'discord', guildId: '111', channelId: '222', messageId: '333' });
     });
 });

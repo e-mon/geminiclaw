@@ -29,6 +29,56 @@ import { confirmIfNeeded, type ToolEffect, toAnnotations } from './tool-effect.j
 
 const EXEC_TIMEOUT_MS = 120_000;
 
+const SURROUNDING_MESSAGE_LIMIT = 5;
+
+// ── Message URL patterns ────────────────────────────────────────
+
+/** Discord: https://discord.com/channels/{guild}/{channel}/{message} (ptb/canary/discordapp variants) */
+const DISCORD_MESSAGE_URL_RE =
+    /^(?:https?:\/\/)?(?:ptb\.|canary\.)?discord(?:app)?\.com\/channels\/(\d+)\/(\d+)\/(\d+)\/?(?:\?.*)?$/i;
+
+/** Slack: https://{workspace}.slack.com/archives/{channel}/p{ts} */
+const SLACK_MESSAGE_URL_RE = /^(?:https?:\/\/)?([a-z0-9-]+)\.slack\.com\/archives\/([A-Za-z0-9]+)\/p(\d+)\/?(?:\?.*)?$/;
+
+type ParsedMessageUrl =
+    | { platform: 'discord'; guildId: string; channelId: string; messageId: string }
+    | { platform: 'slack'; workspace: string; channelId: string; messageTs: string };
+
+/**
+ * Parse a chat platform message URL into its components.
+ *
+ * Supports Discord and Slack message URLs.
+ *
+ * Args:
+ *     url: Message URL to parse.
+ *
+ * Returns:
+ *     Parsed URL components with platform discriminator, or undefined if unrecognized.
+ */
+export function parseMessageUrl(url: string): ParsedMessageUrl | undefined {
+    const trimmed = url.trim();
+
+    const discordMatch = trimmed.match(DISCORD_MESSAGE_URL_RE);
+    if (discordMatch?.[1] && discordMatch[2] && discordMatch[3]) {
+        return {
+            platform: 'discord',
+            guildId: discordMatch[1],
+            channelId: discordMatch[2],
+            messageId: discordMatch[3],
+        };
+    }
+
+    const slackMatch = trimmed.match(SLACK_MESSAGE_URL_RE);
+    if (slackMatch?.[1] && slackMatch[2] && slackMatch[3]) {
+        // Slack encodes timestamp as p{ts without dot} — insert dot before last 6 digits
+        const rawTs = slackMatch[3];
+        const messageTs = rawTs.length > 6 ? `${rawTs.slice(0, -6)}.${rawTs.slice(-6)}` : rawTs;
+        return { platform: 'slack', workspace: slackMatch[1], channelId: slackMatch[2], messageTs };
+    }
+
+    return undefined;
+}
+
 /** Commands that are never allowed — prevent infinite recursion or destructive ops. */
 const BLOCKED_COMMANDS = new Set(['run', 'start', 'init', 'dashboard', 'vault']);
 
@@ -131,6 +181,27 @@ const TOOLS = [
             required: ['platform', 'channelId', 'message'] as const,
         },
         annotations: toAnnotations('write'),
+    },
+    {
+        name: 'geminiclaw_fetch_message',
+        description:
+            'Fetch a message by its URL from Discord or Slack. ' +
+            'Accepts a full message link and returns the message content with surrounding context. ' +
+            'Supported URL formats:\n' +
+            '- Discord: https://discord.com/channels/{guild}/{channel}/{message}\n' +
+            '- Slack: https://{workspace}.slack.com/archives/{channel}/p{timestamp}\n' +
+            'Use this when the user pastes a chat message URL.',
+        inputSchema: {
+            type: 'object' as const,
+            properties: {
+                url: {
+                    type: 'string' as const,
+                    description: 'Message URL (Discord or Slack)',
+                },
+            },
+            required: ['url'] as const,
+        },
+        annotations: toAnnotations('read'),
     },
     {
         name: 'geminiclaw_admin',
@@ -344,6 +415,215 @@ async function handlePostMessage(
     }
 }
 
+// ── Message fetching (Discord / Slack) ──────────────────────────
+
+interface FetchedMessage {
+    author: string;
+    content: string;
+    timestamp: string;
+    isTarget: boolean;
+}
+
+async function fetchDiscordMessages(channelId: string, messageId: string, botToken: string): Promise<FetchedMessage[]> {
+    const resp = await fetch(
+        `https://discord.com/api/v10/channels/${channelId}/messages?around=${messageId}&limit=${SURROUNDING_MESSAGE_LIMIT}`,
+        { headers: { Authorization: `Bot ${botToken}` } },
+    );
+    if (!resp.ok) {
+        const body = await resp.text();
+        throw new Error(`Discord API ${resp.status}: ${body}`);
+    }
+
+    const messages = (await resp.json()) as Array<{
+        id: string;
+        content: string;
+        author: { username: string; global_name?: string };
+        timestamp: string;
+        attachments?: Array<{ filename: string }>;
+        embeds?: Array<{ title?: string; description?: string }>;
+    }>;
+
+    // Discord returns newest-first; reverse for chronological order
+    return [...messages].reverse().map((m) => {
+        const extras: string[] = [];
+        if (m.attachments?.length) {
+            extras.push(`[attachments: ${m.attachments.map((a) => a.filename).join(', ')}]`);
+        }
+        if (m.embeds?.length) {
+            extras.push(`[embeds: ${m.embeds.map((e) => e.title || e.description || '(embed)').join(', ')}]`);
+        }
+        const content = extras.length > 0 ? `${m.content} ${extras.join(' ')}` : m.content;
+        return {
+            author: m.author.global_name || m.author.username,
+            content,
+            timestamp: m.timestamp,
+            isTarget: m.id === messageId,
+        };
+    });
+}
+
+type SlackApiMessage = {
+    ts: string;
+    text: string;
+    user?: string;
+    username?: string;
+    files?: Array<{ name: string }>;
+};
+
+async function fetchSlackHistory(botToken: string, params: URLSearchParams): Promise<SlackApiMessage[]> {
+    const resp = await fetch(`https://slack.com/api/conversations.history?${params}`, {
+        headers: { Authorization: `Bearer ${botToken}` },
+    });
+    if (!resp.ok) {
+        throw new Error(`Slack API HTTP ${resp.status}`);
+    }
+    const body = (await resp.json()) as {
+        ok: boolean;
+        error?: string;
+        messages?: SlackApiMessage[];
+    };
+    if (!body.ok) {
+        throw new Error(`Slack API error: ${body.error ?? 'unknown'}`);
+    }
+    return body.messages ?? [];
+}
+
+function toFetchedMessage(m: SlackApiMessage, targetTs: string): FetchedMessage {
+    const extras: string[] = [];
+    if (m.files?.length) {
+        extras.push(`[files: ${m.files.map((f) => f.name).join(', ')}]`);
+    }
+    const content = extras.length > 0 ? `${m.text} ${extras.join(' ')}` : m.text;
+    const tsMs = Math.floor(Number.parseFloat(m.ts) * 1000);
+    return {
+        author: m.username || m.user || 'Unknown',
+        content,
+        timestamp: new Date(tsMs).toISOString(),
+        isTarget: m.ts === targetTs,
+    };
+}
+
+async function fetchSlackMessages(channelId: string, messageTs: string, botToken: string): Promise<FetchedMessage[]> {
+    const half = Math.floor(SURROUNDING_MESSAGE_LIMIT / 2);
+
+    // Fetch messages up to and including the target (newest-first → older context)
+    const beforeParams = new URLSearchParams({
+        channel: channelId,
+        latest: messageTs,
+        inclusive: 'true',
+        limit: String(half + 1),
+    });
+
+    // Fetch messages after the target (oldest-first → newer context)
+    const afterParams = new URLSearchParams({
+        channel: channelId,
+        oldest: messageTs,
+        inclusive: 'false',
+        limit: String(half),
+    });
+
+    const [beforeMsgs, afterMsgs] = await Promise.all([
+        fetchSlackHistory(botToken, beforeParams),
+        fetchSlackHistory(botToken, afterParams),
+    ]);
+
+    if (beforeMsgs.length === 0 && afterMsgs.length === 0) {
+        throw new Error('No messages found');
+    }
+
+    // beforeMsgs is newest-first, afterMsgs is newest-first; combine chronologically
+    const combined = [...[...beforeMsgs].reverse(), ...[...afterMsgs].reverse()];
+    return combined.map((m) => toFetchedMessage(m, messageTs));
+}
+
+function formatFetchedMessages(messages: FetchedMessage[], url: string, platform: string, timezone: string): string {
+    const lines = messages.map((m) => {
+        const prefix = m.isTarget ? '>>> ' : '    ';
+        const ts = new Date(m.timestamp).toLocaleString('ja-JP', { timeZone: timezone });
+        return `${prefix}[${ts}] ${m.author}: ${m.content}`;
+    });
+    const label = platform.charAt(0).toUpperCase() + platform.slice(1);
+    return `${label} message (${url}):\n${lines.join('\n')}`;
+}
+
+async function handleFetchMessage(
+    workspace: string,
+    args: Record<string, unknown>,
+): Promise<{ content: Array<{ type: 'text'; text: string }>; isError?: boolean }> {
+    const url = args.url as string | undefined;
+    if (!url) {
+        return { content: [{ type: 'text', text: 'Error: url is required' }], isError: true };
+    }
+
+    const parsed = parseMessageUrl(url);
+    if (!parsed) {
+        return {
+            content: [
+                {
+                    type: 'text',
+                    text:
+                        'Error: Unrecognized message URL. Supported formats:\n' +
+                        '- Discord: https://discord.com/channels/{guild}/{channel}/{message}\n' +
+                        '- Slack: https://{workspace}.slack.com/archives/{channel}/p{timestamp}',
+                },
+            ],
+            isError: true,
+        };
+    }
+
+    const config = loadConfig();
+    const start = Date.now();
+    const toolName = 'geminiclaw_fetch_message';
+
+    try {
+        let messages: FetchedMessage[];
+        let auditParams: Record<string, string>;
+
+        if (parsed.platform === 'discord') {
+            const botToken = config.channels.discord.token;
+            if (!botToken) {
+                return { content: [{ type: 'text', text: 'Error: Discord bot token not configured' }], isError: true };
+            }
+            messages = await fetchDiscordMessages(parsed.channelId, parsed.messageId, botToken);
+            auditParams = { platform: 'discord', channelId: parsed.channelId, messageId: parsed.messageId };
+        } else {
+            const botToken = config.channels.slack.token;
+            if (!botToken) {
+                return { content: [{ type: 'text', text: 'Error: Slack bot token not configured' }], isError: true };
+            }
+            messages = await fetchSlackMessages(parsed.channelId, parsed.messageTs, botToken);
+            auditParams = { platform: 'slack', channelId: parsed.channelId, messageTs: parsed.messageTs };
+        }
+
+        const output = formatFetchedMessages(messages, url, parsed.platform, config.timezone);
+
+        auditLog(workspace, {
+            ts: new Date().toISOString(),
+            tool: toolName,
+            effect: 'read' as ToolEffect,
+            params: auditParams,
+            ok: true,
+            ms: Date.now() - start,
+            resultLines: messages.length,
+        });
+
+        return { content: [{ type: 'text', text: output }] };
+    } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+
+        auditLog(workspace, {
+            ts: new Date().toISOString(),
+            tool: toolName,
+            effect: 'read' as ToolEffect,
+            params: { platform: parsed.platform },
+            ok: false,
+            ms: Date.now() - start,
+        });
+
+        return { content: [{ type: 'text', text: `Error: ${errMsg}` }], isError: true };
+    }
+}
+
 async function handleListChannels(
     args: Record<string, unknown> | undefined,
 ): Promise<{ content: Array<{ type: 'text'; text: string }>; isError?: boolean }> {
@@ -408,6 +688,10 @@ export function createAdminServer(workspace: string): Server {
 
         if (name === 'geminiclaw_list_channels') {
             return handleListChannels(reqArgs as Record<string, unknown> | undefined);
+        }
+
+        if (name === 'geminiclaw_fetch_message') {
+            return handleFetchMessage(workspace, reqArgs as Record<string, unknown>);
         }
 
         if (name === 'geminiclaw_post_message') {
