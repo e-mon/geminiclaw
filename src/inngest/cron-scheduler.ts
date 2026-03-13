@@ -33,14 +33,11 @@ const log = createLogger('cron-scheduler');
 /**
  * Build a `platform:channelId` delivery target string for context injection.
  * The agent uses this to know where to post results via `geminiclaw_post_message`.
- * Falls back to homeChannel when the job has no explicit reply.
+ * Falls back to config.home when the job has no explicit reply.
  */
 function buildDeliveryTarget(job: CronJob, config: ReturnType<typeof loadConfig>): string | undefined {
     if (job.reply) return `${job.reply.channel}:${job.reply.channelId}`;
-    const dc = config.channels.discord;
-    if (dc.enabled && dc.homeChannel) return `discord:${dc.homeChannel}`;
-    const sc = config.channels.slack;
-    if (sc.enabled && sc.homeChannel) return `slack:${sc.homeChannel}`;
+    if (config.home) return `${config.home.channel}:${config.home.channelId}`;
     return undefined;
 }
 

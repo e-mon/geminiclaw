@@ -47,7 +47,7 @@ export function shouldBootstrap(params: {
     if (!existsSync(join(workspacePath, BOOTSTRAP_FILENAME))) return false;
 
     // For channel triggers, only activate in home channel or DMs
-    if (trigger === 'discord' || trigger === 'slack') {
+    if (trigger === 'discord' || trigger === 'slack' || trigger === 'telegram') {
         if (!isHomeChannel && !isDM) return false;
     }
 

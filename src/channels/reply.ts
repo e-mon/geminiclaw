@@ -160,7 +160,7 @@ export async function deliverReply(opts: {
  * Unified replacement for the former sendLegacyReply and sendHeartbeatToChannel.
  */
 export async function postToChannel(opts: {
-    channelType: 'discord' | 'slack';
+    channelType: 'discord' | 'slack' | 'telegram';
     channelId: string;
     threadRef?: string;
     text: string;
@@ -183,6 +183,8 @@ export async function postToChannel(opts: {
             channel: channelId,
             threadTs: threadRef ?? '',
         } as never);
+    } else if (channelType === 'telegram') {
+        threadId = adapter.encodeThreadId({ chatId: channelId } as never);
     } else {
         threadId = threadRef
             ? adapter.encodeThreadId({ channelId, guildId: '@me', threadId: threadRef } as never)

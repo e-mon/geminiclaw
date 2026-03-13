@@ -157,7 +157,7 @@ export function buildCronCommand(): Command {
 
                 if (options.replyChannel && options.replyChannelId) {
                     job.reply = {
-                        channel: options.replyChannel as 'discord' | 'slack',
+                        channel: options.replyChannel as 'discord' | 'slack' | 'telegram',
                         channelId: options.replyChannelId,
                     };
                 }

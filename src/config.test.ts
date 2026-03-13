@@ -18,9 +18,7 @@ describe('ConfigSchema', () => {
         expect(config.heartbeatIntervalMin).toBe(30);
         expect(config.channels.discord.enabled).toBe(false);
         expect(config.channels.slack.enabled).toBe(false);
-        expect(config.heartbeat.notifications.desktop).toBe(true);
-        expect(config.heartbeat.notifications.discord.enabled).toBe(false);
-        expect(config.heartbeat.notifications.slack.enabled).toBe(false);
+        expect(config.heartbeat.desktop).toBe(true);
     });
 
     it('overrides defaults with provided values', () => {
@@ -101,13 +99,14 @@ describe('loadConfig / patchConfigFile', () => {
     it('deep merges nested keys without clobbering siblings', () => {
         // Set up initial config with discord token
         patchConfigFile({ channels: { discord: { token: 'my-token', enabled: true } } }, configPath);
-        // Patch homeChannel — should NOT erase token/enabled
-        patchConfigFile({ channels: { discord: { homeChannel: '123456' } } }, configPath);
+        // Patch home — should NOT erase channels.discord.token/enabled
+        patchConfigFile({ home: { channel: 'discord', channelId: '123456' } }, configPath);
 
         const raw = JSON.parse(readFileSync(configPath, 'utf-8'));
         expect(raw.channels.discord.token).toBe('my-token');
         expect(raw.channels.discord.enabled).toBe(true);
-        expect(raw.channels.discord.homeChannel).toBe('123456');
+        expect(raw.home.channel).toBe('discord');
+        expect(raw.home.channelId).toBe('123456');
     });
 
     it('creates directory when patching', () => {
@@ -237,6 +236,105 @@ describe('loadConfig / patchConfigFile', () => {
             if (origApiKey !== undefined) process.env.DISCORD_API_KEY = origApiKey;
             else delete process.env.DISCORD_API_KEY;
         }
+    });
+});
+
+describe('legacy config migration', () => {
+    let tmpDir: string;
+    let configPath: string;
+
+    beforeEach(() => {
+        tmpDir = mkdtempSync(join(tmpdir(), 'geminiclaw-test-'));
+        configPath = join(tmpDir, 'config.json');
+    });
+
+    afterEach(() => {
+        rmSync(tmpDir, { recursive: true, force: true });
+    });
+
+    it('migrates homeChannel to top-level home and persists to disk', () => {
+        writeFileSync(
+            configPath,
+            JSON.stringify({
+                workspace: tmpDir,
+                channels: { discord: { enabled: true, homeChannel: '111', token: 'tok' } },
+            }),
+        );
+
+        const config = loadConfig(configPath);
+        expect(config.home).toEqual({ channel: 'discord', channelId: '111' });
+
+        // Verify disk was updated
+        const raw = JSON.parse(readFileSync(configPath, 'utf-8'));
+        expect(raw.home).toEqual({ channel: 'discord', channelId: '111' });
+        expect(raw.channels.discord.homeChannel).toBeUndefined();
+    });
+
+    it('migrates heartbeat.notifications to top-level notifications and persists', () => {
+        writeFileSync(
+            configPath,
+            JSON.stringify({
+                workspace: tmpDir,
+                heartbeat: {
+                    notifications: {
+                        discord: { enabled: true, channelId: '222' },
+                        slack: { enabled: false, channelId: '333' },
+                    },
+                },
+            }),
+        );
+
+        const config = loadConfig(configPath);
+        expect(config.notifications).toEqual({ channel: 'discord', channelId: '222' });
+
+        const raw = JSON.parse(readFileSync(configPath, 'utf-8'));
+        expect(raw.notifications).toEqual({ channel: 'discord', channelId: '222' });
+        expect(raw.heartbeat.notifications).toBeUndefined();
+    });
+
+    it('strips old notifications format { enabled, method }', () => {
+        writeFileSync(
+            configPath,
+            JSON.stringify({
+                workspace: tmpDir,
+                notifications: { enabled: true, method: 'discord' },
+            }),
+        );
+
+        const config = loadConfig(configPath);
+        expect(config.notifications).toBeUndefined();
+
+        const raw = JSON.parse(readFileSync(configPath, 'utf-8'));
+        expect(raw.notifications).toBeUndefined();
+    });
+
+    it('does not overwrite existing home when homeChannel exists on another platform', () => {
+        writeFileSync(
+            configPath,
+            JSON.stringify({
+                workspace: tmpDir,
+                home: { channel: 'slack', channelId: '999' },
+                channels: { discord: { enabled: true, homeChannel: '111' } },
+            }),
+        );
+
+        const config = loadConfig(configPath);
+        expect(config.home).toEqual({ channel: 'slack', channelId: '999' });
+
+        // homeChannel should still be cleaned up from disk
+        const raw = JSON.parse(readFileSync(configPath, 'utf-8'));
+        expect(raw.channels.discord.homeChannel).toBeUndefined();
+    });
+
+    it('does not rewrite file when no migration needed', () => {
+        const content = JSON.stringify({ workspace: tmpDir, model: 'auto' });
+        writeFileSync(configPath, content);
+        const mtimeBefore = readFileSync(configPath, 'utf-8');
+
+        loadConfig(configPath);
+
+        const mtimeAfter = readFileSync(configPath, 'utf-8');
+        expect(mtimeAfter).toBe(mtimeBefore);
     });
 });
 

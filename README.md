@@ -62,7 +62,7 @@ curl -fsSL https://bun.sh/install | bash
 **Ubuntu / Debian / WSL2:**
 ```bash
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt-get install -y nodejs tmux
+sudo apt-get install -y nodejs tmux build-essential
 curl -fsSL https://bun.sh/install | bash
 
 # Docker Engine
@@ -243,7 +243,7 @@ src/
 ├── config/            Zod schema, config I/O, paths, Gemini CLI settings
 ├── memory/            SQLite usage tracking, QMD integration
 ├── mcp/               MCP servers (status, cron, ask-user, gog, admin)
-├── channels/          Chat SDK adapters + reply delivery (Discord/Slack)
+├── channels/          Chat SDK adapters + reply delivery (Discord/Slack/Telegram)
 ├── inngest/           Durable functions (agent-run, heartbeat, cron, daily-summary)
 ├── cli/commands/      CLI command implementations
 ├── vault/             Secret management (keyring/encrypted-file/command)

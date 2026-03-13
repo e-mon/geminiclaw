@@ -9,14 +9,15 @@ GeminiClaw treats **Gemini CLI as the core agent engine** and wraps it with thin
 | LLM reasoning & tool use | **Gemini CLI** (ACP) | Full-featured agent runtime with sandbox, MCP, multi-turn sessions |
 | Durable execution & scheduling | **Inngest** | Retry, step persistence, concurrency control without custom queue |
 | Memory search & retrieval | **QMD** | Hybrid search (BM25 + Vector + LLM reranking) without custom embedder |
-| Multi-channel messaging | **Vercel Chat SDK** | Discord/Slack adapters without managing gateway connections |
+| Multi-channel messaging | **Vercel Chat SDK** | Discord/Slack/Telegram adapters without managing gateway connections |
 
 GeminiClaw itself is the glue: session lifecycle, process pool management, context injection, and security gates. This thin-wrapper approach keeps the codebase extensible without reimplementing capabilities that already exist upstream.
 
 ```
                          ┌─────────────────────┐
                          │   Trigger Sources    │
-                         │  Discord · Slack     │
+                         │  Discord · Slack ·   │
+                         │  Telegram            │
                          │  CLI · Cron · HTTP   │
                          └─────────┬───────────┘
                                    │ webhook / event
@@ -37,8 +38,8 @@ GeminiClaw itself is the glue: session lifecycle, process pool management, conte
 │          │                    │                    │                 │
 │  ┌───────▼─────┐    ┌────────▼────────┐    ┌──────▼──────┐         │
 │  │    QMD      │    │   Chat SDK      │    │    MCP      │         │
-│  │   hybrid    │    │  Discord/Slack  │    │  Servers    │         │
-│  │   search    │    │  reply routing  │    │  gog · cron │         │
+│  │   hybrid    │    │ Discord/Slack/  │    │  Servers    │         │
+│  │   search    │    │   Telegram      │    │  gog · cron │         │
 │  │   over      │    │                 │    │  ask-user   │         │
 │  │   memory    │    │                 │    │  status     │         │
 │  └─────────────┘    └─────────────────┘    │  admin      │         │
@@ -111,11 +112,12 @@ Highest-scoring process wins. Within the same score, recency (`lastUsedAt`) brea
 Inngest serves as both the **durable execution engine** and the **event bus** that unifies all trigger sources. Every external input — webhooks, CLI commands, cron schedules — is normalized into an Inngest event (`geminiclaw/run`), making the agent execution path uniform regardless of origin.
 
 ```
-Discord webhook ─┐
-Slack webhook   ─┤
-CLI command     ─┼─→ inngest.send('geminiclaw/run') ─→ agentRun() ─→ turn lifecycle
-Heartbeat cron  ─┤
-Custom cron     ─┘
+Discord webhook  ─┐
+Slack webhook    ─┤
+Telegram polling ─┤
+CLI command      ─┼─→ inngest.send('geminiclaw/run') ─→ agentRun() ─→ turn lifecycle
+Heartbeat cron   ─┤
+Custom cron      ─┘
 ```
 
 This architecture means adding a new trigger source (e.g. a GitHub webhook, an HTTP API, or a scheduled task) only requires emitting an Inngest event — no changes to the agent execution pipeline.

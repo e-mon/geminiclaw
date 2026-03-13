@@ -23,6 +23,11 @@ import { type Config, ConfigSchema, WORKSPACE_CONFIG_FILENAME, WorkspaceConfigSc
  *   SLACK_BOT_TOKEN                  → channels.slack.token
  *   SLACK_SIGNING_SECRET             → channels.slack.signingSecret
  *
+ * Legacy migration (pre-Zod parse):
+ *   - Old `notifications: { enabled, method }` → stripped (new format: `{ channel, channelId }`)
+ *   - Old `channels.*.homeChannel` → `home: { channel, channelId }`
+ *   - Old `heartbeat.notifications.*.{ enabled, channelId }` → `notifications: { channel, channelId }`
+ *
  * Vault usage: call `await vault.init()` before `loadConfig()` to enable resolution.
  * If vault is not initialized, $vault: references are left as-is (undefined after parse).
  */
@@ -33,6 +38,23 @@ export function loadConfig(configPath: string = CONFIG_PATH): Config {
             json = JSON.parse(readFileSync(configPath, 'utf-8'));
         } catch (err) {
             process.stderr.write(`[geminiclaw] warning: failed to parse ${configPath}: ${String(err)}\n`);
+        }
+    }
+
+    // Migrate legacy config formats before Zod parse.
+    // If any migration fires, the updated JSON is written back to disk
+    // so old keys are cleaned up permanently.
+    if (typeof json === 'object' && json !== null) {
+        const obj = json as Record<string, unknown>;
+        if (migrateLegacyConfig(obj)) {
+            try {
+                writeFileSync(configPath, `${JSON.stringify(obj, null, 2)}\n`, {
+                    encoding: 'utf-8',
+                    mode: 0o600,
+                });
+            } catch (err) {
+                process.stderr.write(`[geminiclaw] warning: failed to write migrated config: ${String(err)}\n`);
+            }
         }
     }
 
@@ -64,6 +86,9 @@ export function loadConfig(configPath: string = CONFIG_PATH): Config {
             if (ws.slack?.respondInChannels !== undefined) {
                 config.channels.slack.respondInChannels = ws.slack.respondInChannels;
             }
+            if (ws.telegram?.respondInChannels !== undefined) {
+                config.channels.telegram.respondInChannels = ws.telegram.respondInChannels;
+            }
         } catch (err) {
             process.stderr.write(
                 `[geminiclaw] warning: failed to parse workspace config ${wsConfigPath}: ${String(err)}\n`,
@@ -71,23 +96,19 @@ export function loadConfig(configPath: string = CONFIG_PATH): Config {
         }
     }
 
-    // Merge homeChannel into respondInChannels (deduplicated)
-    if (config.channels.discord.homeChannel) {
-        const home = config.channels.discord.homeChannel;
-        if (!config.channels.discord.respondInChannels.includes(home)) {
-            config.channels.discord.respondInChannels = [home, ...config.channels.discord.respondInChannels];
-        }
-    }
-    if (config.channels.slack.homeChannel) {
-        const home = config.channels.slack.homeChannel;
-        if (!config.channels.slack.respondInChannels.includes(home)) {
-            config.channels.slack.respondInChannels = [home, ...config.channels.slack.respondInChannels];
+    // Merge home channel into its platform's respondInChannels (deduplicated)
+    if (config.home) {
+        const { channel, channelId } = config.home;
+        const platformConfig = config.channels[channel];
+        if (platformConfig && !platformConfig.respondInChannels.includes(channelId)) {
+            platformConfig.respondInChannels = [channelId, ...platformConfig.respondInChannels];
         }
     }
 
     // Resolve $vault: references — requires vault.init() to have been called first.
     // If the vault is not initialized, resolveSync() is a no-op and returns the raw value.
     config.channels.discord.token = vault.resolveSync(config.channels.discord.token);
+    config.channels.telegram.botToken = vault.resolveSync(config.channels.telegram.botToken);
     config.channels.slack.token = vault.resolveSync(config.channels.slack.token);
     config.channels.slack.signingSecret = vault.resolveSync(config.channels.slack.signingSecret);
 
@@ -124,6 +145,80 @@ export function loadConfig(configPath: string = CONFIG_PATH): Config {
     }
 
     return config;
+}
+
+/**
+ * Migrate legacy config formats in-place.
+ *
+ * Returns true if any migration was applied (caller should persist to disk).
+ *
+ * Migrations:
+ *   1. Old `notifications: { enabled, method }` → deleted (new: `{ channel, channelId }`)
+ *   2. `channels.*.homeChannel` → `home: { channel, channelId }`, old key deleted
+ *   3. `heartbeat.notifications.*.{ enabled, channelId }` → `notifications`, old key deleted
+ */
+function migrateLegacyConfig(obj: Record<string, unknown>): boolean {
+    let migrated = false;
+
+    // 1. Strip legacy top-level `notifications` (old format: { enabled, method })
+    const notif = obj.notifications;
+    if (notif && typeof notif === 'object' && notif !== null && !('channel' in notif)) {
+        delete obj.notifications;
+        migrated = true;
+    }
+
+    // 2. Migrate legacy per-platform homeChannel → top-level `home`.
+    // Prefer enabled platforms; fall back to disabled ones to avoid data loss.
+    if (!obj.home) {
+        const channels = obj.channels as Record<string, Record<string, unknown>> | undefined;
+        if (channels) {
+            let fallback: { channel: string; channelId: string } | undefined;
+            for (const platform of ['discord', 'slack', 'telegram'] as const) {
+                const ch = channels[platform];
+                if (typeof ch?.homeChannel === 'string' && ch.homeChannel) {
+                    if (ch.enabled) {
+                        obj.home = { channel: platform, channelId: ch.homeChannel };
+                        break;
+                    }
+                    fallback ??= { channel: platform, channelId: ch.homeChannel };
+                }
+            }
+            if (!obj.home && fallback) {
+                obj.home = fallback;
+            }
+            if (obj.home) migrated = true;
+        }
+    }
+
+    // Clean up homeChannel keys from all platforms regardless of which was picked
+    const channels = obj.channels as Record<string, Record<string, unknown>> | undefined;
+    if (channels) {
+        for (const platform of ['discord', 'slack', 'telegram']) {
+            if (channels[platform] && 'homeChannel' in channels[platform]) {
+                delete channels[platform].homeChannel;
+                migrated = true;
+            }
+        }
+    }
+
+    // 3. Migrate legacy heartbeat.notifications → top-level `notifications`
+    const hb = obj.heartbeat as Record<string, unknown> | undefined;
+    const hbNotif = hb?.notifications as Record<string, Record<string, unknown>> | undefined;
+    if (hbNotif) {
+        if (!obj.notifications) {
+            for (const platform of ['discord', 'slack', 'telegram'] as const) {
+                const ch = hbNotif[platform];
+                if (ch?.enabled && typeof ch.channelId === 'string' && ch.channelId) {
+                    obj.notifications = { channel: platform, channelId: ch.channelId };
+                    break;
+                }
+            }
+        }
+        delete hb?.notifications;
+        migrated = true;
+    }
+
+    return migrated;
 }
 
 /**

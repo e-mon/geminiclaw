@@ -49,7 +49,7 @@ When you learn a lesson or make a mistake, document it so future-you doesn't rep
 
 ### Sending files and media to the user via chat
 
-To deliver a file or media URL in the channel reply (Discord / Slack), include one or more `MEDIA:` lines **anywhere in your response text**:
+To deliver a file or media URL in the channel reply (Discord / Slack / Telegram), include one or more `MEDIA:` lines **anywhere in your response text**:
 
 ```
 File created.
@@ -63,7 +63,7 @@ MEDIA:https://example.com/screenshot.png
 - **Remote URLs** — `http://` or `https://`. Embedded/unfurled natively by the platform.
 - `MEDIA:` lines are stripped from the visible message before delivery.
 - Missing local paths are silently skipped.
-- Works on every supported channel (Discord, Slack, …).
+- Works on every supported channel (Discord, Slack, Telegram).
 
 ## Preview Server
 

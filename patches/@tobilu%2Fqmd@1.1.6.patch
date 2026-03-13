@@ -36,3 +36,18 @@ index d1b09687ae86c1f22c245091ed7391879057f7c1..29946f0f109449d7d36e071b46cfdfbf
      const server = new McpServer({ name: "qmd", version: "0.9.9" }, { instructions: buildInstructions(store) });
      // ---------------------------------------------------------------------------
      // Resource: qmd://{path} - read-only access to documents by path
+diff --git a/package.json b/package.json
+index a47a93bc0a8cceeb46432cb2e2f797bd2be7ae6b..a7d3041db4c51be80c17aa970db022a448926e63 100644
+--- a/package.json
++++ b/package.json
+@@ -9,7 +9,9 @@
+     ".": {
+       "import": "./dist/index.js",
+       "types": "./dist/index.d.ts"
+-    }
++    },
++    "./dist/store.js": "./dist/store.js",
++    "./dist/mcp.js": "./dist/mcp.js"
+   },
+   "bin": {
+     "qmd": "dist/qmd.js"

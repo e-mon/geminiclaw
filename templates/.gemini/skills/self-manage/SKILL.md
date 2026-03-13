@@ -28,7 +28,7 @@ geminiclaw_admin({ args: ["config", "get", "heartbeat.model"] })
 
 ```
 geminiclaw_admin({ args: ["config", "set", "model", "pro"] })
-geminiclaw_admin({ args: ["config", "set", "heartbeat.notifications", "desktop"] })
+geminiclaw_admin({ args: ["config", "set", "heartbeat.desktop", "true"] })
 ```
 
 Model values: `auto`, `pro`, `flash`, `flash-lite`, `auto-gemini-2.5`, `gemini-2.5-pro`, `gemini-2.5-flash`

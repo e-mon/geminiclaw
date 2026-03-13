@@ -20,7 +20,7 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { SessionStore } from '../agent/session/store.js';
 import type { MediaItem } from '../channels/channel.js';
-import { fetchDiscordChannels, fetchSlackChannels } from '../channels/list-channels.js';
+import { fetchDiscordChannels, fetchSlackChannels, fetchTelegramChats } from '../channels/list-channels.js';
 import { postToChannel } from '../channels/reply.js';
 import { getWorkspacePath } from '../config/paths.js';
 import { loadConfig } from '../config.js';
@@ -85,7 +85,7 @@ const TOOLS = [
     {
         name: 'geminiclaw_list_channels',
         description:
-            'List available channels from configured Discord and Slack integrations. ' +
+            'List available channels from configured Discord, Slack, and Telegram integrations. ' +
             'Returns channel names and IDs. Use this to resolve channel names to IDs ' +
             'when the user references a channel by name (e.g. "#general").',
         inputSchema: {
@@ -93,7 +93,7 @@ const TOOLS = [
             properties: {
                 platform: {
                     type: 'string' as const,
-                    enum: ['discord', 'slack', 'all'],
+                    enum: ['discord', 'slack', 'telegram', 'all'],
                     description: 'Which platform to list channels from. Defaults to "all".',
                 },
             },
@@ -104,7 +104,7 @@ const TOOLS = [
     {
         name: 'geminiclaw_post_message',
         description:
-            'Post a message to a Discord or Slack channel. ' +
+            'Post a message to a Discord, Slack, or Telegram channel. ' +
             'Use geminiclaw_list_channels first to resolve channel names to IDs. ' +
             'Optionally specify threadRef to reply in a thread. ' +
             'Supports file attachments via workspace-relative paths.',
@@ -113,7 +113,7 @@ const TOOLS = [
             properties: {
                 platform: {
                     type: 'string' as const,
-                    enum: ['discord', 'slack'],
+                    enum: ['discord', 'slack', 'telegram'],
                     description: 'Target platform',
                 },
                 channelId: { type: 'string' as const, description: 'Channel ID' },
@@ -266,7 +266,7 @@ async function handlePostMessage(
     workspace: string,
     args: Record<string, unknown>,
 ): Promise<{ content: Array<{ type: 'text'; text: string }>; isError?: boolean }> {
-    const platform = args.platform as 'discord' | 'slack';
+    const platform = args.platform as 'discord' | 'slack' | 'telegram';
     const channelId = args.channelId as string;
     const threadRef = args.threadRef as string | undefined;
     const message = args.message as string;
@@ -375,8 +375,24 @@ async function handleListChannels(
         }
     }
 
+    if (
+        (platform === 'all' || platform === 'telegram') &&
+        config.channels.telegram.enabled &&
+        config.channels.telegram.botToken
+    ) {
+        const chats = await fetchTelegramChats(config.channels.telegram.botToken);
+        if (chats.length > 0) {
+            const lines = chats.map((ch) => `  ${ch.name} → ${ch.id}${ch.group ? ` (${ch.group})` : ''}`);
+            sections.push(`Telegram:\n${lines.join('\n')}`);
+        } else {
+            sections.push('Telegram: no chats found (send a message to the bot first)');
+        }
+    }
+
     if (sections.length === 0) {
-        return { content: [{ type: 'text', text: 'No enabled channels found. Check Discord/Slack configuration.' }] };
+        return {
+            content: [{ type: 'text', text: 'No enabled channels found. Check Discord/Slack/Telegram configuration.' }],
+        };
     }
 
     return { content: [{ type: 'text', text: sections.join('\n\n') }] };

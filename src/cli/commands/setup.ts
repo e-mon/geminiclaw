@@ -10,7 +10,13 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import * as p from '@clack/prompts';
 import type { Command } from 'commander';
-import { type ChannelEntry, fetchDiscordChannels, fetchSlackChannels } from '../../channels/list-channels.js';
+import {
+    type ChannelEntry,
+    fetchDiscordChannels,
+    fetchSlackChannels,
+    fetchTelegramChats,
+    pollForTelegramChat,
+} from '../../channels/list-channels.js';
 import { CONFIG_PATH, type Config, getGeminiBin, getWorkspacePath, loadConfig, patchConfigFile } from '../../config.js';
 import { vault } from '../../vault/index.js';
 import { VAULT_REF_PREFIX } from '../../vault/types.js';
@@ -97,37 +103,154 @@ async function stepDiscord(): Promise<void> {
     p.log.success('Discord integration enabled.');
 }
 
+/** Parse a "platform:channelId" value, splitting only on the first colon. */
+function parseHomeValue(value: string): { channel: string; channelId: string } {
+    const idx = value.indexOf(':');
+    if (idx === -1) throw new Error(`Invalid channel value (expected "platform:id"): ${value}`);
+    return { channel: value.slice(0, idx), channelId: value.slice(idx + 1) };
+}
+
 /**
- * Select a home channel for Discord after secrets are collected.
- * The home channel is used for bootstrap, heartbeat, and @mention-free responses.
+ * Unified home channel selection. The home channel is the agent's primary
+ * destination for bootstrap greetings, heartbeat results, and cron fallback.
+ * Home is mandatory — if only one channel is available, it is auto-selected.
  */
-async function stepDiscordHomeChannel(): Promise<void> {
+async function stepHome(): Promise<void> {
     const config = loadConfig();
-    if (!config.channels.discord.enabled || !config.channels.discord.token) return;
 
-    const s = p.spinner();
-    s.start('Fetching Discord channels...');
-    const channels = await fetchDiscordChannels(config.channels.discord.token);
-    s.stop('Discord channels loaded.');
+    interface HomeOption {
+        value: string;
+        label: string;
+        hint?: string;
+    }
+    const allOptions: HomeOption[] = [];
 
-    const options = toChannelOptions(channels);
+    // --- Discord ---
+    if (config.channels.discord.enabled && config.channels.discord.token) {
+        const s = p.spinner();
+        s.start('Fetching Discord channels...');
+        const channels = await fetchDiscordChannels(config.channels.discord.token);
+        s.stop('Discord channels loaded.');
+        for (const ch of channels) {
+            allOptions.push({
+                value: `discord:${ch.id}`,
+                label: `Discord #${ch.name}`,
+                hint: ch.group,
+            });
+        }
+    }
 
-    if (options.length === 0) {
-        p.log.warn('No text channels found. Skipping home channel setup.');
+    // --- Slack ---
+    if (config.channels.slack.enabled && config.channels.slack.token) {
+        const s = p.spinner();
+        s.start('Fetching Slack channels...');
+        const channels = await fetchSlackChannels(config.channels.slack.token);
+        s.stop('Slack channels loaded.');
+        for (const ch of channels) {
+            allOptions.push({
+                value: `slack:${ch.id}`,
+                label: `Slack #${ch.name}`,
+            });
+        }
+    }
+
+    // --- Telegram ---
+    if (config.channels.telegram.enabled && config.channels.telegram.botToken) {
+        const s = p.spinner();
+        s.start('Fetching Telegram chats...');
+        const chats = await fetchTelegramChats(config.channels.telegram.botToken);
+
+        if (chats.length === 0) {
+            s.stop('No Telegram chats found.');
+
+            // Polling loop with retry/abort
+            let discovered = false;
+            while (!discovered) {
+                p.note(
+                    'Send a message to your bot in Telegram, then wait for auto-detection.',
+                    'Telegram Chat Discovery',
+                );
+                const s2 = p.spinner();
+                s2.start('Waiting for Telegram message... (2 min timeout)');
+                const chat = await pollForTelegramChat(config.channels.telegram.botToken, 120_000);
+                if (chat) {
+                    s2.stop('Telegram chat discovered!');
+                    allOptions.push({
+                        value: `telegram:${chat.id}`,
+                        label: `Telegram ${chat.name}`,
+                        hint: chat.group,
+                    });
+                    discovered = true;
+                } else {
+                    s2.stop('No message received.');
+                    const action = await p.select({
+                        message: 'Telegram chat not detected. What would you like to do?',
+                        options: [
+                            { value: 'retry', label: 'Retry', hint: 'Wait another 2 minutes' },
+                            { value: 'manual', label: 'Enter chat ID manually' },
+                            { value: 'skip', label: 'Skip', hint: 'Use another channel as home' },
+                        ],
+                    });
+                    exitIfCancelled(action);
+
+                    if (action === 'skip') {
+                        discovered = true;
+                    } else if (action === 'manual') {
+                        const manual = await p.text({
+                            message: 'Telegram chat ID (e.g. -1001234567890)',
+                            placeholder: '-1001234567890',
+                            validate: (v) => {
+                                if (!v) return 'Chat ID is required';
+                                if (!/^-?\d+$/.test(v)) return 'Chat ID must be a number (e.g. -1001234567890)';
+                                return undefined;
+                            },
+                        });
+                        exitIfCancelled(manual);
+                        allOptions.push({
+                            value: `telegram:${manual}`,
+                            label: `Telegram ${manual}`,
+                        });
+                        discovered = true;
+                    }
+                    // action === 'retry' → loop continues
+                }
+            }
+        } else {
+            s.stop('Telegram chats loaded.');
+            for (const ch of chats) {
+                allOptions.push({
+                    value: `telegram:${ch.id}`,
+                    label: `Telegram ${ch.name}`,
+                    hint: ch.group,
+                });
+            }
+        }
+    }
+
+    // --- Selection ---
+    if (allOptions.length === 0) {
+        p.log.warn('No channels available. Enable a channel first, then run: geminiclaw setup --step home');
+        return;
+    }
+
+    if (allOptions.length === 1) {
+        const only = allOptions[0] as HomeOption;
+        const { channel, channelId } = parseHomeValue(only.value);
+        patchConfigFile({ home: { channel, channelId } });
+        p.log.success(`Home → ${only.label} (auto-selected)`);
         return;
     }
 
     const selected = await p.select({
-        message: 'Which Discord channel should the agent call home?',
-        options: [{ value: '__skip__', label: 'Skip', hint: 'No home channel' }, ...options],
+        message: 'Which channel should the agent call home?',
+        options: allOptions,
     });
     exitIfCancelled(selected);
 
-    if (selected !== '__skip__') {
-        patchConfigFile({ channels: { discord: { homeChannel: selected } } });
-        const label = options.find((o) => o.value === selected);
-        p.log.success(`Home channel → Discord ${label?.label ?? selected}`);
-    }
+    const { channel, channelId } = parseHomeValue(selected as string);
+    patchConfigFile({ home: { channel, channelId } });
+    const label = allOptions.find((o) => o.value === selected);
+    p.log.success(`Home → ${label?.label ?? selected}`);
 }
 
 /* ------------------------------------------------------------------ */
@@ -162,36 +285,30 @@ async function stepSlack(): Promise<void> {
     p.log.success('Slack integration enabled.');
 }
 
-/**
- * Select a home channel for Slack after secrets are collected.
- */
-async function stepSlackHomeChannel(): Promise<void> {
-    const config = loadConfig();
-    if (!config.channels.slack.enabled || !config.channels.slack.token) return;
+/* ------------------------------------------------------------------ */
+/*  Step: Telegram config                                             */
+/* ------------------------------------------------------------------ */
 
-    const s = p.spinner();
-    s.start('Fetching Slack channels...');
-    const channels = await fetchSlackChannels(config.channels.slack.token);
-    s.stop('Slack channels loaded.');
-
-    const options = toChannelOptions(channels);
-
-    if (options.length === 0) {
-        p.log.warn('No channels found. Skipping home channel setup.');
-        return;
-    }
-
-    const selected = await p.select({
-        message: 'Which Slack channel should the agent call home?',
-        options: [{ value: '__skip__', label: 'Skip', hint: 'No home channel' }, ...options],
+async function stepTelegram(): Promise<void> {
+    const enable = await p.confirm({
+        message: 'Enable Telegram integration?',
+        initialValue: false,
     });
-    exitIfCancelled(selected);
+    exitIfCancelled(enable);
+    if (!enable) return;
 
-    if (selected !== '__skip__') {
-        patchConfigFile({ channels: { slack: { homeChannel: selected } } });
-        const label = options.find((o) => o.value === selected);
-        p.log.success(`Home channel → Slack ${label?.label ?? selected}`);
-    }
+    p.note(
+        [
+            '1. Open @BotFather on Telegram and send /newbot',
+            '2. Follow the prompts to create your bot and copy the token',
+            '3. (Optional) Send /setprivacy → Disable if you want the bot to see group messages',
+            '4. Add the bot to your chat/group and send it a message',
+        ].join('\n'),
+        'Telegram Bot Setup',
+    );
+
+    patchConfigFile({ channels: { telegram: { enabled: true } } });
+    p.log.success('Telegram integration enabled.');
 }
 
 /* ------------------------------------------------------------------ */
@@ -353,6 +470,7 @@ async function collectSecrets(): Promise<void> {
     const channels = (raw.channels ?? {}) as Record<string, Record<string, unknown>>;
     const discord = (channels.discord ?? {}) as Record<string, unknown>;
     const slack = (channels.slack ?? {}) as Record<string, unknown>;
+    const telegram = (channels.telegram ?? {}) as Record<string, unknown>;
     // Build the list of secrets to collect based on enabled channels
     interface SecretEntry {
         label: string;
@@ -369,6 +487,15 @@ async function collectSecrets(): Promise<void> {
             hint: 'Discord Developer Portal → Bot → Token',
             configDotPath: 'channels.discord.token',
             vaultKey: 'discord-token',
+        });
+    }
+
+    if (telegram.enabled === true && !telegram.botToken) {
+        entries.push({
+            label: 'Telegram Bot Token',
+            hint: '@BotFather → /newbot → Token',
+            configDotPath: 'channels.telegram.botToken',
+            vaultKey: 'telegram-bot-token',
         });
     }
 
@@ -468,69 +595,51 @@ async function stepHeartbeatNotifications(): Promise<void> {
         'Job Notifications',
     );
 
-    const raw: Record<string, unknown> = existsSync(CONFIG_PATH)
-        ? (JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')) as Record<string, unknown>)
-        : {};
+    // Collect all enabled platform channels for notification target selection
+    const allOptions: { value: string; label: string }[] = [];
 
-    if (!raw.heartbeat) raw.heartbeat = {};
-    const hb = raw.heartbeat as Record<string, unknown>;
-    if (!hb.notifications) hb.notifications = {};
-    const notif = hb.notifications as Record<string, unknown>;
-
-    let hasChanges = false;
-
-    // --- Discord ---
     if (config.channels.discord.enabled && config.channels.discord.token) {
         const s = p.spinner();
         s.start('Fetching Discord channels...');
         const channels = await fetchDiscordChannels(config.channels.discord.token);
         s.stop('Discord channels loaded.');
-
-        const options = toChannelOptions(channels);
-
-        if (options.length > 0) {
-            const selected = await p.select({
-                message: 'Notification channel for background jobs (heartbeat & cron)?',
-                options: [{ value: '__skip__', label: 'Skip', hint: 'Do not send to Discord' }, ...options],
-            });
-            exitIfCancelled(selected);
-
-            if (selected !== '__skip__') {
-                notif.discord = { enabled: true, channelId: selected };
-                hasChanges = true;
-                const label = options.find((o) => o.value === selected);
-                p.log.success(`Job notifications → Discord ${label?.label ?? selected}`);
-            }
-        } else {
-            p.log.warn('No text channels found in Discord. Skipping.');
+        for (const ch of toChannelOptions(channels)) {
+            allOptions.push({ value: `discord:${ch.value}`, label: `Discord ${ch.label}` });
         }
     }
 
-    // --- Slack ---
     if (config.channels.slack.enabled && config.channels.slack.token) {
         const s = p.spinner();
         s.start('Fetching Slack channels...');
         const channels = await fetchSlackChannels(config.channels.slack.token);
         s.stop('Slack channels loaded.');
-
-        const options = toChannelOptions(channels);
-
-        if (options.length > 0) {
-            const selected = await p.select({
-                message: 'Notification channel for background jobs (heartbeat & cron)?',
-                options: [{ value: '__skip__', label: 'Skip', hint: 'Do not send to Slack' }, ...options],
-            });
-            exitIfCancelled(selected);
-
-            if (selected !== '__skip__') {
-                notif.slack = { enabled: true, channelId: selected };
-                hasChanges = true;
-                const label = options.find((o) => o.value === selected);
-                p.log.success(`Job notifications → Slack ${label?.label ?? selected}`);
-            }
-        } else {
-            p.log.warn('No channels found in Slack. Skipping.');
+        for (const ch of toChannelOptions(channels)) {
+            allOptions.push({ value: `slack:${ch.value}`, label: `Slack ${ch.label}` });
         }
+    }
+
+    if (config.channels.telegram.enabled && config.channels.telegram.botToken) {
+        const telegramChats = await fetchTelegramChats(config.channels.telegram.botToken);
+        for (const ch of telegramChats) {
+            allOptions.push({ value: `telegram:${ch.id}`, label: `Telegram ${ch.name}` });
+        }
+    }
+
+    if (allOptions.length > 0) {
+        const selected = await p.select({
+            message: 'Notification channel for background jobs (heartbeat & cron)?',
+            options: [{ value: '__skip__', label: 'Skip', hint: 'No channel notifications' }, ...allOptions],
+        });
+        exitIfCancelled(selected);
+
+        if (selected !== '__skip__') {
+            const parsed = parseHomeValue(selected as string);
+            patchConfigFile({ notifications: parsed });
+            const label = allOptions.find((o) => o.value === selected);
+            p.log.success(`Job notifications → ${label?.label ?? selected}`);
+        }
+    } else {
+        p.log.warn('No channels available. Skipping channel notifications.');
     }
 
     // --- Desktop ---
@@ -539,17 +648,7 @@ async function stepHeartbeatNotifications(): Promise<void> {
         initialValue: true,
     });
     exitIfCancelled(enableDesktop);
-    notif.desktop = enableDesktop;
-    hasChanges = true;
-
-    if (hasChanges) {
-        const dir = CONFIG_PATH.replace(/[/\\][^/\\]+$/, '');
-        if (!existsSync(dir)) {
-            const { mkdirSync } = await import('node:fs');
-            mkdirSync(dir, { recursive: true, mode: 0o700 });
-        }
-        writeFileSync(CONFIG_PATH, `${JSON.stringify(raw, null, 2)}\n`, { encoding: 'utf-8', mode: 0o600 });
-    }
+    patchConfigFile({ heartbeat: { desktop: enableDesktop } });
 
     if (enableDesktop) {
         p.log.success('Desktop notifications: enabled');
@@ -575,24 +674,28 @@ function printSummary(config: Config, workspacePath: string): void {
 
     const check = (ok: boolean): string => (ok ? '\x1b[32m✔\x1b[0m' : '\x1b[2m—\x1b[0m');
 
-    // Build job notification summary (heartbeat + cron)
+    // Build job notification summary
     const notifParts: string[] = [];
-    if (config.heartbeat.notifications.desktop) notifParts.push('desktop (alerts)');
-    if (config.heartbeat.notifications.discord.enabled && config.heartbeat.notifications.discord.channelId)
-        notifParts.push(`Discord #${config.heartbeat.notifications.discord.channelId}`);
-    if (config.heartbeat.notifications.slack.enabled && config.heartbeat.notifications.slack.channelId)
-        notifParts.push(`Slack #${config.heartbeat.notifications.slack.channelId}`);
+    if (config.heartbeat.desktop) notifParts.push('desktop (alerts)');
+    if (config.notifications) {
+        notifParts.push(`${config.notifications.channel} #${config.notifications.channelId}`);
+    }
     const notifSummary = notifParts.length > 0 ? notifParts.join(' + ') : 'none';
+
+    // Home summary
+    const homeSummary = config.home ? `${config.home.channel} #${config.home.channelId}` : 'not set';
 
     p.note(
         [
-            `Workspace   ${workspacePath}`,
-            `Language    ${config.language}`,
-            `SOUL.md     ${check(soulConfigured)} ${soulConfigured ? 'configured' : 'not set (auto-generated on first conversation)'}`,
-            `Discord     ${check(config.channels.discord.enabled)} ${config.channels.discord.enabled ? 'enabled' : 'disabled'}`,
-            `Slack       ${check(config.channels.slack.enabled)} ${config.channels.slack.enabled ? 'enabled' : 'disabled'}`,
-            `Google      ${check(!!config.gogAccount)} ${config.gogAccount || 'not configured'}`,
-            `Timezone    ${config.timezone || systemTz}`,
+            `Workspace     ${workspacePath}`,
+            `Language      ${config.language}`,
+            `SOUL.md       ${check(soulConfigured)} ${soulConfigured ? 'configured' : 'not set (auto-generated on first conversation)'}`,
+            `Discord       ${check(config.channels.discord.enabled)} ${config.channels.discord.enabled ? 'enabled' : 'disabled'}`,
+            `Slack         ${check(config.channels.slack.enabled)} ${config.channels.slack.enabled ? 'enabled' : 'disabled'}`,
+            `Telegram      ${check(config.channels.telegram.enabled)} ${config.channels.telegram.enabled ? 'enabled' : 'disabled'}`,
+            `Google        ${check(!!config.gogAccount)} ${config.gogAccount || 'not configured'}`,
+            `Timezone      ${config.timezone || systemTz}`,
+            `Home          ${check(!!config.home)} ${homeSummary}`,
             `Notifications ${check(notifParts.length > 0)} ${notifSummary}`,
         ].join('\n'),
         'Setup Summary',
@@ -684,8 +787,11 @@ export async function runSetupWizard(config: Config, workspacePath: string): Pro
     // Step 3: Discord
     await stepDiscord();
 
-    // Step 5: Slack
+    // Step 4: Slack
     await stepSlack();
+
+    // Step 5: Telegram
+    await stepTelegram();
 
     // Step 6: Google Workspace
     await stepGoogle();
@@ -698,15 +804,9 @@ export async function runSetupWizard(config: Config, workspacePath: string): Pro
         await collectSecrets();
     }
 
-    // Step 9: Home channel selection (requires tokens from step 8)
+    // Step 9: Home channel selection (mandatory, requires tokens from step 8)
     if (process.stdin.isTTY) {
-        await stepDiscordHomeChannel();
-        await stepSlackHomeChannel();
-    }
-
-    // Step 10: Job notifications (heartbeat + cron completion notices)
-    if (process.stdin.isTTY) {
-        await stepHeartbeatNotifications();
+        await stepHome();
     }
 
     // Re-initialize to register MCP servers with all collected settings
@@ -727,9 +827,9 @@ export async function runSetupWizard(config: Config, workspacePath: string): Pro
 const STEP_RUNNERS: Record<string, () => Promise<void>> = {
     language: stepLanguage,
     discord: stepDiscord,
-    'discord-home': stepDiscordHomeChannel,
     slack: stepSlack,
-    'slack-home': stepSlackHomeChannel,
+    telegram: stepTelegram,
+    home: stepHome,
     gog: stepGoogle,
     timezone: stepTimezone,
     secrets: collectSecrets,
@@ -737,7 +837,7 @@ const STEP_RUNNERS: Record<string, () => Promise<void>> = {
 };
 
 /** Steps that modify MCP server config and require re-initialization afterward. */
-const STEPS_NEEDING_REINIT = new Set(['discord', 'slack', 'gog', 'secrets']);
+const STEPS_NEEDING_REINIT = new Set(['discord', 'slack', 'telegram', 'gog', 'secrets']);
 
 export function registerSetupCommand(program: Command): void {
     program
@@ -746,7 +846,7 @@ export function registerSetupCommand(program: Command): void {
         .option('--check', 'Check setup status without launching the wizard')
         .option(
             '--step <name>',
-            'Run a single setup step (language, discord, discord-home, slack, slack-home, gog, timezone, secrets, notifications)',
+            'Run a single setup step (language, discord, slack, telegram, home, gog, timezone, secrets, notifications)',
         )
         .action(async (options) => {
             const config = loadConfig();
@@ -764,8 +864,11 @@ export function registerSetupCommand(program: Command): void {
                     discordTokenSet: !!config.channels.discord.token,
                     slackEnabled: config.channels.slack.enabled,
                     slackTokenSet: !!config.channels.slack.token,
+                    telegramEnabled: config.channels.telegram.enabled,
+                    telegramTokenSet: !!config.channels.telegram.botToken,
                     gogAccount: config.gogAccount || null,
                     timezone: config.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
+                    home: config.home ?? null,
                 };
                 process.stdout.write(`${JSON.stringify(checks, null, 2)}\n`);
                 return;

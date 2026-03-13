@@ -79,6 +79,15 @@ function deriveSessionId(thread: Thread, tz?: string): string {
         return threadTs ? `slack-${channel}-${threadTs}` : `slack-${channel}-${dateSuffix}`;
     }
 
+    if (adapterName === 'telegram') {
+        // thread.id = "telegram:chatId" or "telegram:chatId:messageThreadId"
+        const chatId = parts[1] ?? '';
+        if (thread.isDM) {
+            return `telegram-dm-${chatId}-${dateSuffix}`;
+        }
+        return `telegram-${chatId}-${dateSuffix}`;
+    }
+
     // Fallback for unknown adapters
     return `${adapterName}-${thread.id}`;
 }
@@ -95,6 +104,7 @@ function extractRawChannelId(thread: Thread): string {
     const parts = thread.id.split(':');
     if (thread.adapter.name === 'discord') return parts[2] ?? '';
     if (thread.adapter.name === 'slack') return parts[1] ?? '';
+    if (thread.adapter.name === 'telegram') return parts[1] ?? '';
     return thread.channelId;
 }
 
@@ -119,6 +129,12 @@ function deriveChannelSessionPrefix(thread: Thread): string {
         const channel = parts[1] ?? '';
         if (thread.isDM) return `slack-dm-${channel}`;
         return `slack-${channel}`;
+    }
+
+    if (adapterName === 'telegram') {
+        const chatId = parts[1] ?? '';
+        if (thread.isDM) return `telegram-dm-${chatId}`;
+        return `telegram-${chatId}`;
     }
 
     return `${adapterName}-${parts.slice(0, -1).join('-')}`;
@@ -285,14 +301,9 @@ async function buildEventData(thread: Thread, message: Message): Promise<AgentRu
     }
 
     // Determine if this is the configured home channel
-    const homeChannelId =
-        adapterName === 'discord'
-            ? config.channels.discord.homeChannel
-            : adapterName === 'slack'
-              ? config.channels.slack.homeChannel
-              : undefined;
     const rawChannelId = extractRawChannelId(thread);
-    const isHomeChannel = !!homeChannelId && rawChannelId === homeChannelId;
+    const isHomeChannel =
+        !!config.home && config.home.channel === adapterName && rawChannelId === config.home.channelId;
 
     return {
         sessionId,
@@ -310,7 +321,7 @@ async function buildEventData(thread: Thread, message: Message): Promise<AgentRu
 /**
  * Check if a message in a non-subscribed, non-mention context should be handled.
  *
- * For Discord/Slack: only respond in channels listed in respondInChannels.
+ * For Discord/Slack/Telegram: only respond in channels listed in respondInChannels.
  * For other adapters: never respond (require @mention or subscription).
  *
  * Args:
@@ -324,7 +335,13 @@ function shouldRespondInChannel(thread: Thread): boolean {
     const config = loadConfig();
 
     const channelConfig =
-        adapterName === 'discord' ? config.channels.discord : adapterName === 'slack' ? config.channels.slack : null;
+        adapterName === 'discord'
+            ? config.channels.discord
+            : adapterName === 'slack'
+              ? config.channels.slack
+              : adapterName === 'telegram'
+                ? config.channels.telegram
+                : null;
     if (!channelConfig) return false;
 
     const { respondInChannels } = channelConfig;
@@ -443,7 +460,7 @@ export function registerHandlers(chat: Chat): void {
     });
 
     // Handle all messages matching any text in unsubscribed, non-mention contexts.
-    // Used for respondInChannels feature (respond without @mention) on Discord and Slack.
+    // Used for respondInChannels feature (respond without @mention) on Discord, Slack, and Telegram.
     chat.onNewMessage(/[\s\S]*/, async (thread, message) => {
         if (!isUserMessage(thread, message)) return;
         if (!shouldRespondInChannel(thread)) return;
@@ -497,29 +514,33 @@ export function registerHandlers(chat: Chat): void {
         const logText = `**Agent asked:** ${pending.question}\n\n**${userName}** selected: ${answer}`;
 
         try {
-            const adapterName = event.thread.adapter.name;
-            if (adapterName === 'discord') {
-                // Discord: clear embeds + components (buttons) via REST API
-                const rawChannelId = extractDiscordMessageChannelId(event.threadId);
-                const botToken = (event.thread.adapter as unknown as { botToken: string }).botToken;
-                await fetch(`https://discord.com/api/v10/channels/${rawChannelId}/messages/${event.messageId}`, {
-                    method: 'PATCH',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        Authorization: `Bot ${botToken}`,
-                    },
-                    body: JSON.stringify({ content: logText, embeds: [], components: [] }),
-                });
-            } else if (adapterName === 'slack') {
-                // Slack: clear blocks (buttons) via REST API so they can't be re-clicked
-                await editSlackMessage(event.thread, event.messageId, logText);
+            if (!event.thread) {
+                log.warn('event.thread is null, cannot edit card');
             } else {
-                await event.thread.adapter.editMessage(event.threadId, event.messageId, logText);
+                const adapterName = event.thread.adapter.name;
+                if (adapterName === 'discord') {
+                    // Discord: clear embeds + components (buttons) via REST API
+                    const rawChannelId = extractDiscordMessageChannelId(event.threadId);
+                    const botToken = (event.thread.adapter as unknown as { botToken: string }).botToken;
+                    await fetch(`https://discord.com/api/v10/channels/${rawChannelId}/messages/${event.messageId}`, {
+                        method: 'PATCH',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            Authorization: `Bot ${botToken}`,
+                        },
+                        body: JSON.stringify({ content: logText, embeds: [], components: [] }),
+                    });
+                } else if (adapterName === 'slack') {
+                    // Slack: clear blocks (buttons) via REST API so they can't be re-clicked
+                    await editSlackMessage(event.thread, event.messageId, logText);
+                } else {
+                    await event.thread.adapter.editMessage(event.threadId, event.messageId, logText);
+                }
             }
         } catch (err) {
             log.warn('failed to edit card into Q&A log, falling back to post', { error: String(err) });
             try {
-                await event.thread.post(`**${userName}** selected: ${answer}`);
+                await event.thread?.post(`**${userName}** selected: ${answer}`);
             } catch (postErr) {
                 log.warn('failed to post action confirmation', { error: String(postErr) });
             }

@@ -244,10 +244,15 @@ describe('basic translation injection', () => {
         }
     });
 
-    it('does not create any tp-block wrapper divs', () => {
+    it('wraps block pairs in .tp-block containers with data-state', () => {
         const dom = setup();
         const blocks = dom.window.document.querySelectorAll('.tp-block');
-        expect(blocks.length).toBe(0);
+        expect(blocks.length).toBe(2); // h1 + p (code is skipped)
+        blocks.forEach((block) => {
+            expect(block.getAttribute('data-state')).toBe('translated');
+            expect(block.querySelector('.tp-translated')).toBeTruthy();
+            expect(block.querySelector('.tp-original')).toBeTruthy();
+        });
     });
 
     it('sets translated text content', () => {
@@ -264,13 +269,13 @@ describe('basic translation injection', () => {
         expect(originals[1].textContent).toBe('This is a test paragraph.');
     });
 
-    it('pairs translated and original via data-tp-pair / data-tp-id', () => {
+    it('pairs translated and original inside same .tp-block wrapper', () => {
         const dom = setup();
-        const translated = dom.window.document.querySelectorAll('.tp-translated');
-        translated.forEach((el) => {
-            const pairId = el.getAttribute('data-tp-pair');
-            expect(pairId).toBeTruthy();
-            const original = dom.window.document.querySelector(`[data-tp-id="${pairId}"]`);
+        const blocks = dom.window.document.querySelectorAll('.tp-block');
+        blocks.forEach((block) => {
+            const translated = block.querySelector('.tp-translated');
+            const original = block.querySelector('.tp-original');
+            expect(translated).toBeTruthy();
             expect(original).toBeTruthy();
             expect(original?.classList.contains('tp-original')).toBe(true);
         });
@@ -347,16 +352,15 @@ describe('injected styles and scripts', () => {
         return dom;
     }
 
-    it('injects style tag with body-class-based visibility rules', () => {
+    it('injects style tag with data-state-based visibility rules', () => {
         const dom = setup();
         const styles = dom.window.document.querySelectorAll('style[data-tp]');
         expect(styles.length).toBe(1);
         const css = styles[0].textContent || '';
-        // Should use body class approach, not .tp-block wrapper
-        expect(css).toContain('.tp-original');
-        expect(css).toContain('body.tp-mode-original');
-        expect(css).toContain('body.tp-mode-both');
-        expect(css).not.toContain('.tp-block');
+        expect(css).toContain('.tp-block[data-state="translated"]');
+        expect(css).toContain('.tp-block[data-state="original"]');
+        expect(css).toContain('.tp-block[data-state="both"]');
+        expect(css).toContain('display: contents');
     });
 
     it('injects script tag with data-tp attribute', () => {
@@ -364,7 +368,7 @@ describe('injected styles and scripts', () => {
         const scripts = dom.window.document.querySelectorAll('script[data-tp]');
         expect(scripts.length).toBe(1);
         expect(scripts[0].textContent).toContain('data-tp-mode');
-        expect(scripts[0].textContent).toContain('tpSetMode');
+        expect(scripts[0].textContent).toContain('tpToggle');
     });
 });
 
@@ -372,7 +376,7 @@ describe('injected styles and scripts', () => {
 // Nested structures
 // ============================================================
 describe('nested structures', () => {
-    it('li elements remain direct children of ul (valid HTML)', () => {
+    it('li elements are wrapped in .tp-block inside ul', () => {
         const dom = createMarkedDom(`<html><head></head><body>
       <ul>
         <li data-tp-id="0">Item one</li>
@@ -387,20 +391,18 @@ describe('nested structures', () => {
         };
         injectTranslations(dom.window.document as unknown as Document, data);
 
-        // No wrapper divs
+        // .tp-block wrappers with display:contents preserve list layout
         const wrappers = dom.window.document.querySelectorAll('.tp-block');
-        expect(wrappers.length).toBe(0);
+        expect(wrappers.length).toBe(2);
 
-        // All li elements (translated + original) are direct children of ul
-        const ul = dom.window.document.querySelector('ul');
-        expect(ul).toBeTruthy();
-        const children = Array.from(ul?.children);
-        expect(children.every((c) => c.tagName === 'LI')).toBe(true);
-        // 2 translated + 2 original = 4 li elements
-        expect(children.length).toBe(4);
+        // Each wrapper contains translated + original li
+        wrappers.forEach((w) => {
+            expect(w.querySelector('.tp-translated')?.tagName).toBe('LI');
+            expect(w.querySelector('.tp-original')?.tagName).toBe('LI');
+        });
     });
 
-    it('flex parent children are not disrupted', () => {
+    it('flex parent children wrapped in .tp-block with display:contents', () => {
         const dom = createMarkedDom(`<html><head></head><body>
       <div style="display:flex">
         <p data-tp-id="0">Flex child 1</p>
@@ -415,17 +417,15 @@ describe('nested structures', () => {
         };
         injectTranslations(dom.window.document as unknown as Document, data);
 
-        // No wrapper divs inserted
+        // .tp-block wrappers inserted (display:contents avoids layout disruption)
         const wrappers = dom.window.document.querySelectorAll('.tp-block');
-        expect(wrappers.length).toBe(0);
+        expect(wrappers.length).toBe(2);
 
-        // All children of flex container are <p> tags (same tag type preserved)
-        const flex = dom.window.document.querySelector('div[style]');
-        expect(flex).toBeTruthy();
-        const children = Array.from(flex?.children);
-        expect(children.every((c) => c.tagName === 'P')).toBe(true);
-        // 2 translated + 2 original = 4
-        expect(children.length).toBe(4);
+        // Each wrapper contains translated + original <p> tags
+        wrappers.forEach((w) => {
+            expect(w.querySelector('.tp-translated')?.tagName).toBe('P');
+            expect(w.querySelector('.tp-original')?.tagName).toBe('P');
+        });
     });
 
     it('inline spans: no wrapper, text swap in place', () => {

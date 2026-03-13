@@ -71,6 +71,20 @@ export const ConfigSchema = z.object({
      * Set to 0 to disable session resumption entirely.
      */
     sessionIdleMinutes: z.number().min(0).default(60),
+    /** Primary channel for the agent. Bootstrap greetings, heartbeat and cron results are sent here. */
+    home: z
+        .object({
+            channel: z.enum(['discord', 'slack', 'telegram']),
+            channelId: z.string(),
+        })
+        .optional(),
+    /** Channel for background job notifications (heartbeat alerts, cron completion). */
+    notifications: z
+        .object({
+            channel: z.enum(['discord', 'slack', 'telegram']),
+            channelId: z.string(),
+        })
+        .optional(),
     /** Heartbeat-specific settings. */
     heartbeat: z
         .object({
@@ -81,31 +95,8 @@ export const ConfigSchema = z.object({
              * Falls back to the global `model` setting when omitted.
              */
             model: z.string().default('flash'),
-            /**
-             * Heartbeat notification destinations.
-             * Channel notifications receive every run result (execution logs).
-             * Desktop notifications only fire on alerts (response is NOT HEARTBEAT_OK).
-             */
-            notifications: z
-                .object({
-                    /** macOS/Linux desktop notification. Enabled by default so alerts are never silent. */
-                    desktop: z.boolean().default(true),
-                    /** Post heartbeat alerts to a Discord channel. */
-                    discord: z
-                        .object({
-                            enabled: z.boolean().default(false),
-                            channelId: z.string().optional(),
-                        })
-                        .default({}),
-                    /** Post heartbeat alerts to a Slack channel. */
-                    slack: z
-                        .object({
-                            enabled: z.boolean().default(false),
-                            channelId: z.string().optional(),
-                        })
-                        .default({}),
-                })
-                .default({}),
+            /** macOS/Linux desktop notification for heartbeat alerts. Enabled by default so alerts are never silent. */
+            desktop: z.boolean().default(true),
         })
         .default({}),
     channels: z
@@ -115,13 +106,21 @@ export const ConfigSchema = z.object({
                     token: z.string().optional(),
                     enabled: z.boolean().default(false),
                     /**
-                     * Primary channel for the agent. Bootstrap greetings and heartbeat
-                     * notifications are sent here. Automatically included in respondInChannels.
-                     */
-                    homeChannel: z.string().optional(),
-                    /**
                      * Channel IDs where the bot responds to all messages without requiring @mention.
-                     * homeChannel is automatically included at runtime — no need to list it here.
+                     * home channel is automatically included at runtime — no need to list it here.
+                     * Can be updated by the agent via {workspace}/config.json.
+                     */
+                    respondInChannels: z.array(z.string()).default([]),
+                })
+                .default({}),
+            telegram: z
+                .object({
+                    botToken: z.string().optional(),
+                    enabled: z.boolean().default(false),
+                    mode: z.enum(['auto', 'webhook', 'polling']).default('auto'),
+                    /**
+                     * Chat IDs where the bot responds to all messages without requiring @mention.
+                     * home.channelId is automatically included at runtime when home.channel is 'telegram'.
                      * Can be updated by the agent via {workspace}/config.json.
                      */
                     respondInChannels: z.array(z.string()).default([]),
@@ -133,13 +132,8 @@ export const ConfigSchema = z.object({
                     signingSecret: z.string().optional(),
                     enabled: z.boolean().default(false),
                     /**
-                     * Primary channel for the agent. Bootstrap greetings and heartbeat
-                     * notifications are sent here. Automatically included in respondInChannels.
-                     */
-                    homeChannel: z.string().optional(),
-                    /**
                      * Channel IDs where the bot responds to all messages without requiring @mention.
-                     * homeChannel is automatically included at runtime — no need to list it here.
+                     * home channel is automatically included at runtime — no need to list it here.
                      * Can be updated by the agent via {workspace}/config.json.
                      */
                     respondInChannels: z.array(z.string()).default([]),
@@ -256,6 +250,12 @@ export const WorkspaceConfigSchema = z.object({
     slack: z
         .object({
             /** Channel IDs where the bot responds without @mention. */
+            respondInChannels: z.array(z.string()).optional(),
+        })
+        .optional(),
+    telegram: z
+        .object({
+            /** Chat IDs where the bot responds without @mention. */
             respondInChannels: z.array(z.string()).optional(),
         })
         .optional(),

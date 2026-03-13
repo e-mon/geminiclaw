@@ -41,19 +41,21 @@ function injectTranslations(doc, data) {
       node.className = (node.className ? node.className + ' ' : '') + 'tp-inline';
       node.setAttribute('data-tp-state', 'translated');
     } else {
-      // Block nodes: adjacent sibling approach (no wrapper div)
-      // Clone original tag for translated text — preserves CSS inheritance
+      // Block nodes: wrap in .tp-block container with data-state toggle
+      // (same structure as twitter-render.js for consistent interaction)
       var translated = node.cloneNode(false);
       translated.textContent = cleanText;
       translated.className = (translated.className ? translated.className + ' ' : '') + 'tp-translated';
       translated.removeAttribute('data-tp-id');
-      translated.setAttribute('data-tp-pair', String(block.id));
 
-      // Mark original: hide by default, keep full DOM structure
       node.className = (node.className ? node.className + ' ' : '') + 'tp-original';
 
-      // Insert translated clone immediately before the original
-      node.parentNode.insertBefore(translated, node);
+      var wrapper = doc.createElement('div');
+      wrapper.className = 'tp-block';
+      wrapper.setAttribute('data-state', 'translated');
+      node.parentNode.insertBefore(wrapper, node);
+      wrapper.appendChild(translated);
+      wrapper.appendChild(node);
     }
   }
 
@@ -115,14 +117,11 @@ function _tp_injectStyles(doc) {
     '.tp-btn-active { background: #3b82f6; color: #fff; border-color: #3b82f6; }' +
     '.tp-btn-active:hover { background: #2563eb; }' +
 
-    /* Bilingual blocks — default: translated mode (original hidden) */
-    '.tp-original { display: none !important; }' +
-    /* Original mode: hide translated, show original */
-    'body.tp-mode-original .tp-translated { display: none !important; }' +
-    'body.tp-mode-original .tp-original { display: initial !important; }' +
-    /* Both mode: show both, muted original */
-    'body.tp-mode-both .tp-original { ' +
-      'display: initial !important; ' +
+    /* Bilingual blocks — data-state driven (matches twitter-render.js) */
+    '.tp-block { display: contents; }' +
+    '.tp-block[data-state="translated"] .tp-original { display: none; }' +
+    '.tp-block[data-state="original"] .tp-translated { display: none; }' +
+    '.tp-block[data-state="both"] .tp-original { ' +
       'color: #6b7280; font-size: 0.85em; ' +
       'border-left: 3px solid rgba(59,130,246,0.3); ' +
       'padding-left: 8px; margin-top: 4px; }' +
@@ -136,7 +135,7 @@ function _tp_injectStyles(doc) {
       '.tp-btn { border-color: #4b5563; color: #d1d5db; }' +
       '.tp-btn:hover { background: #374151; }' +
       '.tp-btn-active { background: #3b82f6; color: #fff; border-color: #3b82f6; }' +
-      'body.tp-mode-both .tp-original { color: #9ca3af; }' +
+      '.tp-block[data-state="both"] .tp-original { color: #9ca3af; }' +
     '}';
 
   (doc.head || doc.documentElement).appendChild(style);
@@ -147,10 +146,19 @@ function _tp_injectInteractionScript(doc) {
   script.setAttribute('data-tp', 'true');
   script.textContent =
     '(function(){' +
-      // Global mode switch via header buttons (body class approach)
-      'function tpSetMode(mode){' +
-        'document.body.classList.remove("tp-mode-translated","tp-mode-original","tp-mode-both");' +
-        'if(mode!=="translated")document.body.classList.add("tp-mode-"+mode);' +
+      // Toggle a single .tp-block through translated→both→original→translated
+      'function tpToggle(block){' +
+        'var s=block.getAttribute("data-state");' +
+        'block.setAttribute("data-state",s==="translated"?"both":s==="both"?"original":"translated");' +
+      '}' +
+
+      // Global mode switch via header buttons
+      'document.addEventListener("click",function(e){' +
+        'var btn=e.target.closest("[data-tp-mode]");' +
+        'if(!btn)return;' +
+        'var mode=btn.getAttribute("data-tp-mode");' +
+        // Set all blocks
+        'document.querySelectorAll(".tp-block").forEach(function(b){b.setAttribute("data-state",mode);});' +
         // Inline elements: swap text content
         'document.querySelectorAll(".tp-inline").forEach(function(el){' +
           'var orig=el.getAttribute("data-tp-original")||"";' +
@@ -160,48 +168,26 @@ function _tp_injectInteractionScript(doc) {
           'else el.textContent=trans;' +
           'el.setAttribute("data-tp-state",mode);' +
         '});' +
-      '}' +
-      'document.addEventListener("click",function(e){' +
-        'var btn=e.target.closest("[data-tp-mode]");' +
-        'if(!btn)return;' +
-        'var mode=btn.getAttribute("data-tp-mode");' +
-        'tpSetMode(mode);' +
         'document.querySelectorAll(".tp-btn").forEach(function(b){b.classList.remove("tp-btn-active");});' +
         'btn.classList.add("tp-btn-active");' +
       '});' +
 
-      // Long-press toggle on individual pair (500ms)
-      'var _tpTimer=null,_tpMoved=false;' +
-      'function tpTogglePair(el){' +
-        'var pair=el.closest("[data-tp-pair]");' +
-        'if(!pair)pair=el.closest("[data-tp-id]");' +
-        'if(!pair)return;' +
-        'var id=pair.getAttribute("data-tp-pair")||pair.getAttribute("data-tp-id");' +
-        'var t=document.querySelector("[data-tp-pair=\\""+id+"\\"]");' +
-        'var o=document.querySelector("[data-tp-id=\\""+id+"\\"]");' +
-        'if(!t||!o)return;' +
-        // Cycle: translated→both→original→translated
-        'var tHidden=getComputedStyle(t).display==="none";' +
-        'var oHidden=getComputedStyle(o).display==="none";' +
-        'if(!tHidden&&oHidden){t.style.display="";o.style.display="initial";}' +  // translated→both
-        'else if(!tHidden&&!oHidden){t.style.display="none";o.style.display="initial";}' +  // both→original
-        'else{t.style.display="";o.style.display="none";}' +  // original→translated
-      '}' +
+      // Long-press toggle on individual block (500ms)
+      'var _tpTimer=null;' +
       'document.addEventListener("touchstart",function(e){' +
-        'var pair=e.target.closest("[data-tp-pair]")||e.target.closest("[data-tp-id]");' +
-        'if(!pair)return;' +
-        '_tpMoved=false;' +
-        '_tpTimer=setTimeout(function(){tpTogglePair(pair);},500);' +
+        'var block=e.target.closest(".tp-block");' +
+        'if(!block)return;' +
+        '_tpTimer=setTimeout(function(){tpToggle(block);},500);' +
       '},{passive:true});' +
-      'document.addEventListener("touchmove",function(){_tpMoved=true;if(_tpTimer){clearTimeout(_tpTimer);_tpTimer=null;}},{passive:true});' +
+      'document.addEventListener("touchmove",function(){if(_tpTimer){clearTimeout(_tpTimer);_tpTimer=null;}},{passive:true});' +
       'document.addEventListener("touchend",function(){if(_tpTimer){clearTimeout(_tpTimer);_tpTimer=null;}},{passive:true});' +
 
       // Right-click toggle on desktop
       'document.addEventListener("contextmenu",function(e){' +
-        'var pair=e.target.closest("[data-tp-pair]")||e.target.closest("[data-tp-id]");' +
-        'if(!pair)return;' +
+        'var block=e.target.closest(".tp-block");' +
+        'if(!block)return;' +
         'e.preventDefault();' +
-        'tpTogglePair(pair);' +
+        'tpToggle(block);' +
       '});' +
     '})();';
 
@@ -214,17 +200,70 @@ function _tp_escapeHtml(str) {
 
 // ── Capture: inline CSS, absolutize URLs, strip scripts ──
 
+/**
+ * Rewrite localhost URLs to the page's actual origin.
+ * Some sites (e.g. Next.js on Vercel) SSR with localhost URLs that the CDN
+ * normally rewrites. When agent-browser fetches the page, these survive and
+ * cause resource loads to fail.
+ */
+function _tp_rewriteLocalhost(href, base) {
+  if (!href) return href;
+  var m = href.match(/^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?(\/.*)/);
+  if (!m) return href;
+  try {
+    var origin = new URL(base).origin;
+    return origin + m[1];
+  } catch (_) {
+    return href;
+  }
+}
+
 function _tp_capturePage(doc) {
   var base = doc.baseURI || '';
 
-  // 1. Inline external stylesheets
+  // 1a. Capture CSS from CSSOM — gets whatever the browser actually loaded,
+  // regardless of whether the URLs were correct or rewritten by JS at runtime.
+  // Absolutize relative url() references using each sheet's href as base.
+  var cssomTexts = [];
+  for (var s = 0; s < doc.styleSheets.length; s++) {
+    try {
+      var sheet = doc.styleSheets[s];
+      if (sheet.ownerNode && sheet.ownerNode.getAttribute && sheet.ownerNode.getAttribute('data-tp')) continue;
+      var rules = sheet.cssRules || sheet.rules;
+      if (!rules || !rules.length) continue;
+      var sheetBase = sheet.href || base;
+      var css = '';
+      for (var r = 0; r < rules.length; r++) css += rules[r].cssText + '\n';
+      // Resolve relative url() in CSS to absolute using the sheet's origin
+      if (css && sheetBase) {
+        css = css.replace(/url\(["']?([^"')]+)["']?\)/g, function(match, u) {
+          if (u.startsWith('data:') || u.startsWith('http://') || u.startsWith('https://')) return match;
+          try { return 'url("' + new URL(u, sheetBase).href + '")'; } catch (_) { return match; }
+        });
+      }
+      if (css) cssomTexts.push(css);
+    } catch (_) {
+      // Cross-origin stylesheets throw SecurityError — handled in 1b
+    }
+  }
+
+  // 1b. For <link rel="stylesheet"> tags whose CSS wasn't captured via CSSOM
+  // (cross-origin or failed to load), fetch with localhost rewriting.
   var linkPromises = [];
   var links = doc.querySelectorAll('link[rel="stylesheet"]');
   for (var i = 0; i < links.length; i++) {
     (function(link) {
       var href = link.href;
       if (!href) { link.remove(); return; }
-      var p = fetch(href).then(function(res) {
+      // Check if this sheet was already captured via CSSOM
+      try {
+        var rules = link.sheet && (link.sheet.cssRules || link.sheet.rules);
+        if (rules && rules.length > 0) { link.remove(); return; }
+      } catch (_) { /* cross-origin — need to fetch */ }
+      // Rewrite localhost URLs to the page's real origin before fetching
+      var fetchUrl = _tp_rewriteLocalhost(href, base);
+      var p = fetch(fetchUrl).then(function(res) {
+        if (!res.ok) throw new Error(res.status);
         return res.text();
       }).then(function(css) {
         var style = doc.createElement('style');
@@ -239,22 +278,39 @@ function _tp_capturePage(doc) {
   }
 
   return Promise.all(linkPromises).then(function() {
+    // 1c. Inject CSSOM-captured CSS as inlined <style> block
+    if (cssomTexts.length) {
+      var inlined = doc.createElement('style');
+      inlined.setAttribute('data-tp-inlined', 'true');
+      inlined.textContent = cssomTexts.join('\n');
+      (doc.head || doc.documentElement).appendChild(inlined);
+    }
+
     // 2. Absolutize relative URLs
     _tp_absolutizeUrls(doc, base);
 
-    // 3. Remove non-tp scripts
+    // 3. Remove localhost preload/prefetch links (unreachable in saved HTML)
+    var preloads = doc.querySelectorAll('link[rel="preload"], link[rel="prefetch"], link[rel="preconnect"], link[rel="modulepreload"]');
+    for (var p = 0; p < preloads.length; p++) {
+      var ph = preloads[p].getAttribute('href') || '';
+      if (/^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?\//.test(ph)) {
+        preloads[p].remove();
+      }
+    }
+
+    // 4. Remove non-tp scripts
     var scripts = doc.querySelectorAll('script:not([data-tp])');
     for (var j = 0; j < scripts.length; j++) {
       scripts[j].remove();
     }
 
-    // 4. Remove noscript tags
+    // 5. Remove noscript tags
     var noscripts = doc.querySelectorAll('noscript');
     for (var k = 0; k < noscripts.length; k++) {
       noscripts[k].remove();
     }
 
-    // 5. Return full HTML
+    // 6. Return full HTML
     return '<!DOCTYPE html>' + doc.documentElement.outerHTML;
   });
 }

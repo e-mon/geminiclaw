@@ -370,7 +370,7 @@ export function createPreviewServer(
     previewApp.use((_req, res, next) => {
         res.setHeader(
             'Content-Security-Policy',
-            "default-src 'none'; script-src 'self' 'unsafe-inline' http: https:; img-src * data: blob:; style-src 'self' 'unsafe-inline' http: https:; font-src * data:; frame-src http: https:; media-src * data: blob:",
+            "default-src 'none'; script-src 'unsafe-inline'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline' https:; font-src 'self' https:; frame-src https:",
         );
         res.setHeader('X-Content-Type-Options', 'nosniff');
         res.setHeader('X-Frame-Options', 'DENY');

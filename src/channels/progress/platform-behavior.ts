@@ -98,6 +98,7 @@ export function createPlatformBehavior(adapterName: string): PlatformBehavior {
     switch (adapterName) {
         case 'discord':
         case 'slack':
+        case 'telegram':
             return new ReactionPlatformBehavior();
         default:
             return new BasePlatformBehavior();
