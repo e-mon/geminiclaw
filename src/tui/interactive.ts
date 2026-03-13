@@ -3,6 +3,7 @@
  */
 
 import type { EventEmitter } from 'node:events';
+import { suppressLogs } from '../logger.js';
 
 export interface InteractiveTuiOptions {
     emitter: EventEmitter;
@@ -18,6 +19,13 @@ export interface InteractiveTuiHandle {
 }
 
 export async function startInteractiveTui(options: InteractiveTuiOptions): Promise<InteractiveTuiHandle> {
+    suppressLogs(true);
     const { startInteractiveApp } = await import('./pi/interactive-app.js');
-    return startInteractiveApp(options);
+    const handle = await startInteractiveApp(options);
+    return {
+        waitUntilExit: async () => {
+            await handle.waitUntilExit();
+            suppressLogs(false);
+        },
+    };
 }

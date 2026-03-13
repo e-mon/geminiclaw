@@ -5,11 +5,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/geminiclaw/geminiclaw.git"
+    "url": "https://github.com/e-mon/geminiclaw.git"
   },
-  "homepage": "https://github.com/geminiclaw/geminiclaw#readme",
+  "homepage": "https://github.com/e-mon/geminiclaw#readme",
   "bugs": {
-    "url": "https://github.com/geminiclaw/geminiclaw/issues"
+    "url": "https://github.com/e-mon/geminiclaw/issues"
   },
   "engines": {
     "node": ">=20.0.0"

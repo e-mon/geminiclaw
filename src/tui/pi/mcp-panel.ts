@@ -1,10 +1,10 @@
 /**
- * tui/pi/mcp-panel.ts — MCP server status overlay (Ctrl+M).
+ * tui/pi/mcp-panel.ts — MCP server status overlay (Ctrl+P).
  *
  * Shows registered MCP servers from settings and tracks runtime
  * tool call statistics from StreamEvents.
  *
- *   MCP Servers  [Ctrl+M] close
+ *   MCP Servers  [Ctrl+P] close
  *   ─────────────────────────────
  *   geminiclaw-status     1 tool    0 calls
  *   geminiclaw-ask-user   1 tool    0 calls
@@ -97,7 +97,7 @@ export class McpPanelComponent implements Component {
         const rows: string[] = [];
 
         // Title
-        const title = `  ${toolTitle.bold('MCP Servers')}  ${mutedText('[Ctrl+M] close')}`;
+        const title = `  ${toolTitle.bold('MCP Servers')}  ${mutedText('[Ctrl+P] close')}`;
         rows.push(padToWidth(title, w));
         rows.push(padToWidth(borderDim('\u2500'.repeat(w)), w));
 

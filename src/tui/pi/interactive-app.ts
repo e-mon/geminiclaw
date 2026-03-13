@@ -53,7 +53,7 @@ class HintLine implements Component {
             text = mutedText('  Agent running…');
         } else {
             text = mutedText(
-                '  [Shift+Enter] Newline  [Ctrl+L] Clear  [Ctrl+G] Debug  [Ctrl+M] MCP  [Ctrl+W] Files  [Ctrl+C] Quit',
+                '  [Shift+Enter] Newline  [Ctrl+L] Clear  [Ctrl+G] Debug  [Ctrl+P] MCP  [Ctrl+W] Files  [Ctrl+C] Quit',
             );
         }
         return [padToWidth(text, width)];
@@ -116,6 +116,11 @@ export async function startInteractiveApp(options: InteractiveAppOptions): Promi
     let mcpHandle: ReturnType<typeof tui.showOverlay> | null = null;
     let mcpVisible = false;
 
+    // Show starting spinner until ACP process is warm
+    chatLog.showStarting = true;
+    editor.disableSubmit = true;
+    hint.disabled = true;
+
     const stateManager = new InteractiveStateManager(options.emitter, options.defaultModel, () => {
         const state = stateManager.getState();
         const effectiveSessionId = state.sessionId || options.sessionId;
@@ -149,11 +154,25 @@ export async function startInteractiveApp(options: InteractiveAppOptions): Promi
             if (mcpVisible) tui.requestRender();
         }
     };
+    // Spinner animation during warm-up
+    const warmTimer = setInterval(() => {
+        if (chatLog.showStarting) tui.requestRender();
+    }, 100);
+
+    // ACP process is warm — enable editor
+    const onWarm = (): void => {
+        clearInterval(warmTimer);
+        chatLog.showStarting = false;
+        editor.disableSubmit = false;
+        hint.disabled = false;
+        tui.requestRender();
+    };
     const onTurnStart = (): void => {
         debugOverlay.reset();
     };
     options.emitter.on('event', onDebugEvent);
     options.emitter.on('event', onMcpEvent);
+    options.emitter.on('warm', onWarm);
     options.emitter.on('turn-start', onTurnStart);
 
     const PAGE_SIZE = 10;
@@ -225,7 +244,7 @@ export async function startInteractiveApp(options: InteractiveAppOptions): Promi
             toggleDebug();
             return { consume: true };
         }
-        if (matchesKey(data, 'ctrl+m')) {
+        if (matchesKey(data, 'ctrl+p')) {
             toggleMcp();
             return { consume: true };
         }
@@ -322,9 +341,11 @@ export async function startInteractiveApp(options: InteractiveAppOptions): Promi
     return {
         waitUntilExit: async () => {
             await exitPromise;
+            clearInterval(warmTimer);
             stateManager.destroy();
             options.emitter.off('event', onDebugEvent);
             options.emitter.off('event', onMcpEvent);
+            options.emitter.off('warm', onWarm);
             options.emitter.off('turn-start', onTurnStart);
             await terminal.drainInput();
         },

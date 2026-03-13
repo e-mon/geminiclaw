@@ -10,6 +10,16 @@
 type Level = 'INF' | 'WRN' | 'ERR';
 type Fields = Record<string, string | number | boolean | undefined | null>;
 
+/**
+ * When true, all log output is suppressed.
+ * Used by the TUI to prevent stderr writes from corrupting the alternate screen.
+ */
+let suppressed = false;
+
+export function suppressLogs(value: boolean): void {
+    suppressed = value;
+}
+
 /** Timezone-aware time string. Respects TIMEZONE env (IANA format). */
 function currentTime(): string {
     const tz = process.env.TIMEZONE || undefined;
@@ -35,6 +45,7 @@ function serializeFields(fields: Fields): string {
 }
 
 function write(level: Level, component: string, msg: string, fields?: Fields): void {
+    if (suppressed) return;
     const fieldStr = fields ? serializeFields(fields) : '';
     process.stderr.write(`[${currentTime()}] ${level} [${component}] ${msg}${fieldStr}\n`);
 }

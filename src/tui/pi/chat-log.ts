@@ -15,7 +15,7 @@ import type { Component } from '@mariozechner/pi-tui';
 import { wrapTextWithAnsi } from '@mariozechner/pi-tui';
 import chalk from 'chalk';
 import type { OutputChunk } from '../types.js';
-import { formatMarkdownLine, padToWidth } from './format.js';
+import { formatMarkdownLine, padToWidth, spinnerFrame } from './format.js';
 import {
     borderDim,
     mutedText,
@@ -139,9 +139,21 @@ export class ChatLogComponent implements Component {
         this._cachedChunkCount = -1;
     }
 
+    /** Show a spinner when waiting for the ACP process to start. */
+    showStarting = false;
+
     render(width: number): string[] {
         // Reserve 1 row for the scroll hint
         const displayHeight = Math.max(1, this.getHeight() - 1);
+
+        // Starting state: spinner until ACP process is ready
+        if (this.showStarting) {
+            const lines: string[] = [];
+            lines.push('');
+            lines.push(mutedText(`  ${spinnerFrame()} Starting Gemini CLI...`));
+            while (lines.length < displayHeight + 1) lines.push('');
+            return lines;
+        }
 
         if (this._cachedChunkCount !== this._chunks.length || this._cachedWidth !== width) {
             this._cachedLines = this._buildLines(width);

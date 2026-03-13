@@ -42,6 +42,7 @@ export async function startRunApp(options: RunAppOptions): Promise<RunAppHandle>
     const debugOverlay = new DebugOverlayComponent();
 
     chatLog.getHeight = getChatHeight;
+    chatLog.showStarting = true;
     header.trigger = options.trigger;
     let exitResolve!: (code: number) => void;
     const exitPromise = new Promise<number>((r) => {
@@ -68,6 +69,7 @@ export async function startRunApp(options: RunAppOptions): Promise<RunAppHandle>
         header.elapsedMs = state.elapsedMs;
         header.isRunning = state.status === 'running';
 
+        if (state.status !== 'initializing') chatLog.showStarting = false;
         chatLog.setChunks(state.chunks);
 
         footer.tokens = state.tokens;
@@ -79,6 +81,11 @@ export async function startRunApp(options: RunAppOptions): Promise<RunAppHandle>
         if (state.status === 'done') scheduleExit(0, 800);
         if (state.status === 'error') scheduleExit(1, 2000);
     });
+
+    // Tick timer for spinner animation during initializing state
+    const tickTimer = setInterval(() => {
+        if (chatLog.showStarting) tui.requestRender();
+    }, 100);
 
     const PAGE_SIZE = 10;
 
@@ -142,6 +149,7 @@ export async function startRunApp(options: RunAppOptions): Promise<RunAppHandle>
     return {
         waitUntilExit: async () => {
             const code = await exitPromise;
+            clearInterval(tickTimer);
             stateManager.destroy();
             options.emitter.off('event', onDebugEvent);
             await terminal.drainInput();

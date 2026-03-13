@@ -136,6 +136,7 @@ export function registerRunCommand(program: Command): void {
                 if (useInteractive) {
                     const { EventEmitter } = await import('node:events');
                     const { startInteractiveTui } = await import('../../tui/interactive.js');
+                    const { AcpProcessPool } = await import('../../agent/acp/process-pool.js');
 
                     const emitter = new EventEmitter();
                     // Files from --file are only used for the first turn
@@ -174,6 +175,17 @@ export function registerRunCommand(program: Command): void {
                         workspacePath,
                         onUserMessage,
                     });
+
+                    // Pre-warm ACP process so the first turn starts instantly
+                    void AcpProcessPool.acquire(workspacePath, undefined, model)
+                        .then(({ client }) => {
+                            AcpProcessPool.release(workspacePath, client, model);
+                            emitter.emit('warm');
+                        })
+                        .catch(() => {
+                            // Non-fatal — first turn will spawn on demand
+                            emitter.emit('warm');
+                        });
 
                     await tui.waitUntilExit();
                 } else if (useTui && prompt) {
