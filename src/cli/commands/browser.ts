@@ -35,9 +35,7 @@ function abRun(args: string[]): boolean {
     if (result.error) {
         const err = result.error as NodeJS.ErrnoException;
         if (err.code === 'ENOENT') {
-            process.stderr.write(
-                'agent-browser not found. Install it with: bun i -g agent-browser\n',
-            );
+            process.stderr.write('agent-browser not found. Install it with: bun i -g agent-browser\n');
         } else {
             process.stderr.write(`agent-browser error: ${err.message}\n`);
         }

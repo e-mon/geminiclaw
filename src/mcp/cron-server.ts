@@ -308,9 +308,7 @@ export function createCronServer(workspace: string, timezone?: string): Server {
                 }
 
                 return {
-                    content: [
-                        { type: 'text' as const, text: `✅ Job updated:\n\n${formatJobSummary(updated)}` },
-                    ],
+                    content: [{ type: 'text' as const, text: `✅ Job updated:\n\n${formatJobSummary(updated)}` }],
                 };
             }
 
@@ -361,7 +359,10 @@ export function createCronServer(workspace: string, timezone?: string): Server {
                 });
                 return {
                     content: [
-                        { type: 'text' as const, text: `Run history (${entries.length} entries):\n\n${lines.join('\n')}` },
+                        {
+                            type: 'text' as const,
+                            text: `Run history (${entries.length} entries):\n\n${lines.join('\n')}`,
+                        },
                     ],
                 };
             }
