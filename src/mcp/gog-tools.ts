@@ -197,7 +197,8 @@ export const GOG_TOOLS: GogToolDef[] = [
                 attendees: { type: 'string', description: 'Comma-separated attendee emails' },
                 reminder: {
                     type: 'string',
-                    description: 'Custom reminders as method:duration (e.g. "popup:30m", "email:1d"). Comma-separated, max 5.',
+                    description:
+                        'Custom reminders as method:duration (e.g. "popup:30m", "email:1d"). Comma-separated, max 5.',
                 },
                 eventColor: { type: 'string', description: 'Event color ID (1-11)' },
                 location: { type: 'string', description: 'Event location' },
@@ -230,7 +231,8 @@ export const GOG_TOOLS: GogToolDef[] = [
     },
     {
         name: 'gog_calendar_update',
-        description: 'Update an existing calendar event. For recurring events, use scope to control which instances to update.',
+        description:
+            'Update an existing calendar event. For recurring events, use scope to control which instances to update.',
         inputSchema: {
             type: 'object',
             properties: {
@@ -242,11 +244,16 @@ export const GOG_TOOLS: GogToolDef[] = [
                 allDay: { type: 'boolean', description: 'All-day event (use date-only in from/to)' },
                 rrule: {
                     type: 'string',
-                    description:
-                        'Recurrence rule (e.g. "RRULE:FREQ=WEEKLY;BYDAY=MO"). Set empty to clear recurrence.',
+                    description: 'Recurrence rule (e.g. "RRULE:FREQ=WEEKLY;BYDAY=MO"). Set empty to clear recurrence.',
                 },
-                attendees: { type: 'string', description: 'Comma-separated attendee emails (replaces all; set empty to clear)' },
-                addAttendee: { type: 'string', description: 'Comma-separated attendee emails to add (preserves existing)' },
+                attendees: {
+                    type: 'string',
+                    description: 'Comma-separated attendee emails (replaces all; set empty to clear)',
+                },
+                addAttendee: {
+                    type: 'string',
+                    description: 'Comma-separated attendee emails to add (preserves existing)',
+                },
                 reminder: {
                     type: 'string',
                     description: 'Custom reminders as method:duration (e.g. "popup:30m"). Set empty to clear.',
