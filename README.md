@@ -200,6 +200,37 @@ Agents can self-modify behavioral settings via `{workspace}/config.json` (non-se
 
 </details>
 
+<details>
+<summary>Skills</summary>
+
+Browse available skills at [skillsmp.com](https://skillsmp.com).
+
+```bash
+# Search
+geminiclaw skill search <query>
+
+# Scan before installing (static security check, no install)
+geminiclaw skill scan <owner/repo>
+geminiclaw skill scan <owner/repo> --skill <name>   # specific skill only
+geminiclaw skill scan <owner/repo> --llm             # include LLM advisory (slower)
+
+# Install
+geminiclaw skill install <owner/repo>                # all skills from repo
+geminiclaw skill install <owner/repo> --skill <name> # specific skill only
+
+# Manage
+geminiclaw skill list
+geminiclaw skill disable <name>
+geminiclaw skill enable <name>
+geminiclaw skill remove <name>
+```
+
+Installed skills are stored in `{workspace}/.agents/skills/`. Bundled skills ship in `{workspace}/.gemini/skills/`.
+
+Security: install runs a 3-layer check — static pattern scan (blocks danger, warns on suspicious patterns), optional LLM advisory (`--llm`), and runtime Docker sandbox.
+
+</details>
+
 ## Development
 
 ```bash

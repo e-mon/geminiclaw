@@ -18,7 +18,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import type { RiskLevel, SecurityFinding, SecurityReport } from './types.js';
 
-const DEFAULT_SCAN_MODEL = 'gemini-3.1-pro';
+const DEFAULT_SCAN_MODEL = 'pro';
 
 interface PatternRule {
     regex: RegExp;
