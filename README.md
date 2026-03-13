@@ -21,7 +21,7 @@ GeminiClaw extends Gemini CLI — it doesn't replace it. All LLM reasoning, tool
 ## Quick Start
 
 ```bash
-git clone https://github.com/geminiclaw/geminiclaw.git
+git clone https://github.com/e-mon/geminiclaw.git
 cd geminiclaw
 bun install                  # Gemini CLI + QMD + patches auto-applied
 bunx gemini                  # First launch opens browser for Google OAuth
