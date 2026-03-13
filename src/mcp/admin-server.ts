@@ -38,8 +38,7 @@ const DISCORD_MESSAGE_URL_RE =
     /^(?:https?:\/\/)?(?:ptb\.|canary\.)?discord(?:app)?\.com\/channels\/(\d+)\/(\d+)\/(\d+)\/?(?:\?.*)?$/i;
 
 /** Slack: https://{workspace}.slack.com/archives/{channel}/p{ts} */
-const SLACK_MESSAGE_URL_RE =
-    /^(?:https?:\/\/)?([a-z0-9-]+)\.slack\.com\/archives\/([A-Za-z0-9]+)\/p(\d+)\/?(?:\?.*)?$/;
+const SLACK_MESSAGE_URL_RE = /^(?:https?:\/\/)?([a-z0-9-]+)\.slack\.com\/archives\/([A-Za-z0-9]+)\/p(\d+)\/?(?:\?.*)?$/;
 
 type ParsedMessageUrl =
     | { platform: 'discord'; guildId: string; channelId: string; messageId: string }
@@ -61,7 +60,12 @@ export function parseMessageUrl(url: string): ParsedMessageUrl | undefined {
 
     const discordMatch = trimmed.match(DISCORD_MESSAGE_URL_RE);
     if (discordMatch?.[1] && discordMatch[2] && discordMatch[3]) {
-        return { platform: 'discord', guildId: discordMatch[1], channelId: discordMatch[2], messageId: discordMatch[3] };
+        return {
+            platform: 'discord',
+            guildId: discordMatch[1],
+            channelId: discordMatch[2],
+            messageId: discordMatch[3],
+        };
     }
 
     const slackMatch = trimmed.match(SLACK_MESSAGE_URL_RE);
@@ -192,8 +196,7 @@ const TOOLS = [
             properties: {
                 url: {
                     type: 'string' as const,
-                    description:
-                        'Message URL (Discord or Slack)',
+                    description: 'Message URL (Discord or Slack)',
                 },
             },
             required: ['url'] as const,
@@ -421,11 +424,7 @@ interface FetchedMessage {
     isTarget: boolean;
 }
 
-async function fetchDiscordMessages(
-    channelId: string,
-    messageId: string,
-    botToken: string,
-): Promise<FetchedMessage[]> {
+async function fetchDiscordMessages(channelId: string, messageId: string, botToken: string): Promise<FetchedMessage[]> {
     const resp = await fetch(
         `https://discord.com/api/v10/channels/${channelId}/messages?around=${messageId}&limit=${SURROUNDING_MESSAGE_LIMIT}`,
         { headers: { Authorization: `Bot ${botToken}` } },
@@ -471,11 +470,7 @@ type SlackApiMessage = {
     files?: Array<{ name: string }>;
 };
 
-async function fetchSlackHistory(
-    channelId: string,
-    botToken: string,
-    params: URLSearchParams,
-): Promise<SlackApiMessage[]> {
+async function fetchSlackHistory(botToken: string, params: URLSearchParams): Promise<SlackApiMessage[]> {
     const resp = await fetch(`https://slack.com/api/conversations.history?${params}`, {
         headers: { Authorization: `Bearer ${botToken}` },
     });
@@ -508,11 +503,7 @@ function toFetchedMessage(m: SlackApiMessage, targetTs: string): FetchedMessage 
     };
 }
 
-async function fetchSlackMessages(
-    channelId: string,
-    messageTs: string,
-    botToken: string,
-): Promise<FetchedMessage[]> {
+async function fetchSlackMessages(channelId: string, messageTs: string, botToken: string): Promise<FetchedMessage[]> {
     const half = Math.floor(SURROUNDING_MESSAGE_LIMIT / 2);
 
     // Fetch messages up to and including the target (newest-first → older context)
@@ -532,8 +523,8 @@ async function fetchSlackMessages(
     });
 
     const [beforeMsgs, afterMsgs] = await Promise.all([
-        fetchSlackHistory(channelId, botToken, beforeParams),
-        fetchSlackHistory(channelId, botToken, afterParams),
+        fetchSlackHistory(botToken, beforeParams),
+        fetchSlackHistory(botToken, afterParams),
     ]);
 
     if (beforeMsgs.length === 0 && afterMsgs.length === 0) {
@@ -570,9 +561,10 @@ async function handleFetchMessage(
             content: [
                 {
                     type: 'text',
-                    text: 'Error: Unrecognized message URL. Supported formats:\n'
-                        + '- Discord: https://discord.com/channels/{guild}/{channel}/{message}\n'
-                        + '- Slack: https://{workspace}.slack.com/archives/{channel}/p{timestamp}',
+                    text:
+                        'Error: Unrecognized message URL. Supported formats:\n' +
+                        '- Discord: https://discord.com/channels/{guild}/{channel}/{message}\n' +
+                        '- Slack: https://{workspace}.slack.com/archives/{channel}/p{timestamp}',
                 },
             ],
             isError: true,
