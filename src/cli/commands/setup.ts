@@ -182,13 +182,13 @@ async function collectAndTestToken(
 /*  Step: Discord config                                              */
 /* ------------------------------------------------------------------ */
 
-async function stepDiscord(): Promise<void> {
+async function stepDiscord(): Promise<boolean> {
     const enable = await p.confirm({
         message: 'Enable Discord integration?',
         initialValue: false,
     });
     exitIfCancelled(enable);
-    if (!enable) return;
+    if (!enable) return false;
 
     p.note(
         [
@@ -217,6 +217,7 @@ async function stepDiscord(): Promise<void> {
         patchConfigFile({ channels: { discord: { enabled: true } } });
         p.log.warn('Discord: enabled without token. Run `geminiclaw setup --step discord` to add it later.');
     }
+    return true;
 }
 
 /** Parse a "platform:channelId" value, splitting only on the first colon. */
@@ -226,12 +227,22 @@ function parseHomeValue(value: string): { channel: string; channelId: string } {
     return { channel: value.slice(0, idx), channelId: value.slice(idx + 1) };
 }
 
+interface EnabledAdapters {
+    discord?: boolean;
+    slack?: boolean;
+    telegram?: boolean;
+}
+
 /**
  * Unified home channel selection. The home channel is the agent's primary
  * destination for bootstrap greetings, heartbeat results, and cron fallback.
  * Home is mandatory — if only one channel is available, it is auto-selected.
+ *
+ * When called from the full wizard, `enabled` restricts channel loading to
+ * only the adapters the user enabled in this session. When called standalone
+ * (`--step home`), all enabled adapters with tokens are loaded.
  */
-async function stepHome(): Promise<void> {
+async function stepHome(enabled?: EnabledAdapters): Promise<void> {
     const config = loadConfig();
 
     interface HomeOption {
@@ -241,8 +252,11 @@ async function stepHome(): Promise<void> {
     }
     const allOptions: HomeOption[] = [];
 
+    const shouldLoad = (adapter: keyof EnabledAdapters, configEnabled: boolean): boolean =>
+        enabled ? !!enabled[adapter] && configEnabled : configEnabled;
+
     // --- Discord ---
-    if (config.channels.discord.enabled && config.channels.discord.token) {
+    if (shouldLoad('discord', config.channels.discord.enabled) && config.channels.discord.token) {
         const s = p.spinner();
         s.start('Fetching Discord channels...');
         const channels = await fetchDiscordChannels(config.channels.discord.token);
@@ -257,7 +271,7 @@ async function stepHome(): Promise<void> {
     }
 
     // --- Slack ---
-    if (config.channels.slack.enabled && config.channels.slack.token) {
+    if (shouldLoad('slack', config.channels.slack.enabled) && config.channels.slack.token) {
         const s = p.spinner();
         s.start('Fetching Slack channels...');
         const channels = await fetchSlackChannels(config.channels.slack.token);
@@ -271,7 +285,7 @@ async function stepHome(): Promise<void> {
     }
 
     // --- Telegram ---
-    if (config.channels.telegram.enabled && config.channels.telegram.botToken) {
+    if (shouldLoad('telegram', config.channels.telegram.enabled) && config.channels.telegram.botToken) {
         const s = p.spinner();
         s.start('Fetching Telegram chats...');
         const chats = await fetchTelegramChats(config.channels.telegram.botToken);
@@ -373,13 +387,13 @@ async function stepHome(): Promise<void> {
 /*  Step: Slack config                                                */
 /* ------------------------------------------------------------------ */
 
-async function stepSlack(): Promise<void> {
+async function stepSlack(): Promise<boolean> {
     const enable = await p.confirm({
         message: 'Enable Slack integration?',
         initialValue: false,
     });
     exitIfCancelled(enable);
-    if (!enable) return;
+    if (!enable) return false;
 
     p.note(
         [
@@ -432,19 +446,20 @@ async function stepSlack(): Promise<void> {
     } else {
         p.log.warn('Slack: enabled without credentials. Run `geminiclaw setup --step slack` to add them later.');
     }
+    return true;
 }
 
 /* ------------------------------------------------------------------ */
 /*  Step: Telegram config                                             */
 /* ------------------------------------------------------------------ */
 
-async function stepTelegram(): Promise<void> {
+async function stepTelegram(): Promise<boolean> {
     const enable = await p.confirm({
         message: 'Enable Telegram integration?',
         initialValue: false,
     });
     exitIfCancelled(enable);
-    if (!enable) return;
+    if (!enable) return false;
 
     p.note(
         [
@@ -468,6 +483,7 @@ async function stepTelegram(): Promise<void> {
         patchConfigFile({ channels: { telegram: { enabled: true } } });
         p.log.warn('Telegram: enabled without token. Run `geminiclaw setup --step telegram` to add it later.');
     }
+    return true;
 }
 
 /* ------------------------------------------------------------------ */
@@ -944,13 +960,13 @@ export async function runSetupWizard(config: Config, workspacePath: string): Pro
     // SOUL.md is now generated during bootstrap (first agent conversation)
 
     // Step 3: Discord
-    await stepDiscord();
+    const discordEnabled = await stepDiscord();
 
     // Step 4: Slack
-    await stepSlack();
+    const slackEnabled = await stepSlack();
 
     // Step 5: Telegram
-    await stepTelegram();
+    const telegramEnabled = await stepTelegram();
 
     // Step 6: Google Workspace
     await stepGoogle();
@@ -958,9 +974,9 @@ export async function runSetupWizard(config: Config, workspacePath: string): Pro
     // Step 7: Timezone
     await stepTimezone();
 
-    // Step 8: Home channel selection (tokens collected in adapter steps above)
+    // Step 8: Home channel selection (only for adapters enabled in this session)
     if (process.stdin.isTTY) {
-        await stepHome();
+        await stepHome({ discord: discordEnabled, slack: slackEnabled, telegram: telegramEnabled });
     }
 
     // Re-initialize to register MCP servers with all collected settings
@@ -978,12 +994,12 @@ export async function runSetupWizard(config: Config, workspacePath: string): Pro
 }
 
 /** Available step names for `--step`. */
-const STEP_RUNNERS: Record<string, () => Promise<void>> = {
+const STEP_RUNNERS: Record<string, () => Promise<unknown>> = {
     language: stepLanguage,
     discord: stepDiscord,
     slack: stepSlack,
     telegram: stepTelegram,
-    home: stepHome,
+    home: () => stepHome(),
     gog: stepGoogle,
     timezone: stepTimezone,
     secrets: collectSecrets,
