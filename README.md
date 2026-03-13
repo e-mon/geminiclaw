@@ -112,12 +112,20 @@ Auth state is stored at `~/.geminiclaw/browser-auth-state.json` and auto-restore
 Required by the heartbeat skill for Gmail, Calendar, Drive:
 
 ```bash
+# Full setup: GCP project creation → OAuth → API enablement (interactive)
+bash scripts/setup-gog.sh
+
+# Then install gog CLI and authenticate
 brew install steipete/tap/gogcli                        # macOS
 # go install github.com/steipete/gog@latest             # Linux
-
 gog auth credentials ~/Downloads/client_secret_*.json   # OAuth credentials
 gog auth add YOUR_EMAIL@gmail.com                       # Authenticate
-geminiclaw setup                                        # Register with GeminiClaw
+geminiclaw setup --step gog                             # Register with GeminiClaw
+```
+
+Already have a GCP project? Add/update APIs only:
+```bash
+bash scripts/setup-gog.sh --enable-apis <project-id>
 ```
 
 See [gog setup guide](https://github.com/steipete/gog#setup) for details.

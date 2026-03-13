@@ -509,15 +509,14 @@ async function stepGoogle(): Promise<void> {
     if (gogCheck.status !== 0) {
         p.note(
             [
-                'gog CLI is not installed. Run the setup script:',
-                '  bash scripts/setup-gog.sh',
+                'gog CLI is not installed. Set up Google Cloud and install gog:',
                 '',
-                'This will create a Google Cloud project, enable APIs,',
-                'and guide you through OAuth setup.',
+                '  bash scripts/setup-gog.sh                              # GCP project + OAuth + APIs',
+                '  brew install steipete/tap/gogcli                       # macOS',
+                '  gog auth credentials ~/Downloads/client_secret_*.json  # Register OAuth',
+                '  gog auth add YOUR_EMAIL@gmail.com                      # Authenticate',
                 '',
-                'Or install manually:',
-                '  brew install steipete/tap/gogcli',
-                '  See: https://github.com/steipete/gog#setup',
+                'See: https://github.com/steipete/gog#setup',
                 '',
                 'After setup, run:',
                 '  geminiclaw setup --step gog',
@@ -538,12 +537,11 @@ async function stepGoogle(): Promise<void> {
     if (accounts.length === 0) {
         p.note(
             [
-                'No gog accounts found. Run the setup script:',
-                '  bash scripts/setup-gog.sh',
+                'No gog accounts found. Run the setup script and authenticate:',
                 '',
-                'Or set up manually:',
-                '  gog auth credentials ~/Downloads/client_secret_*.json',
-                '  gog auth add YOUR_EMAIL@gmail.com',
+                '  bash scripts/setup-gog.sh                              # GCP project + OAuth + APIs',
+                '  gog auth credentials ~/Downloads/client_secret_*.json  # Register OAuth',
+                '  gog auth add YOUR_EMAIL@gmail.com                      # Authenticate',
                 '',
                 'Then run:',
                 '  geminiclaw setup --step gog',
