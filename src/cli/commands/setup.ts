@@ -948,10 +948,10 @@ export async function runSetupWizard(config: Config, workspacePath: string): Pro
     // Preflight: check Gemini CLI version
     checkGeminiCli();
 
-    // Step 1: Initialize workspace
+    // Step 1: Initialize workspace (skip QMD — runs at the end with a descriptive spinner)
     const s = p.spinner();
     s.start('Initializing workspace...');
-    await initializeWorkspace(config);
+    await initializeWorkspace(config, { skipQmd: true });
     s.stop('Workspace initialized.');
 
     // Step 2: Language preference
@@ -979,10 +979,12 @@ export async function runSetupWizard(config: Config, workspacePath: string): Pro
         await stepHome({ discord: discordEnabled, slack: slackEnabled, telegram: telegramEnabled });
     }
 
-    // Re-initialize to register MCP servers with all collected settings
-    // (gogAccount, channels, etc. written during the wizard steps above).
+    // Re-initialize to register MCP servers and download memory search models.
     const freshConfig = loadConfig();
+    const finalSpinner = p.spinner();
+    finalSpinner.start('Finalizing setup (downloading memory search models, first run may take a few minutes)...');
     await initializeWorkspace(freshConfig);
+    finalSpinner.stop('Setup finalized.');
 
     // Summary
     printSummary(freshConfig, workspacePath);
