@@ -118,24 +118,64 @@ async function testTelegramToken(token: string): Promise<string | null> {
 }
 
 /**
- * Run a connection test with a spinner. Returns true if successful.
- * On failure, logs a warning but does NOT block setup — the user can fix later.
+ * Run a connection test with a spinner. Returns the success message or null on failure.
  */
 async function runConnectionTest(
     testFn: (token: string) => Promise<string | null>,
     token: string,
     platform: string,
-): Promise<boolean> {
+): Promise<string | null> {
     const s = p.spinner();
     s.start(`Testing ${platform} connection...`);
     const result = await testFn(token);
     if (result && !result.startsWith('Connected')) {
         s.stop(`${platform}: ${result}`);
-        p.log.warn('Token saved but connection test failed. You can update it later.');
-        return false;
+        return null;
     }
     s.stop(result ?? `${platform}: connected.`);
-    return true;
+    return result;
+}
+
+interface TokenPromptConfig {
+    message: string;
+    validate?: (v: string | undefined) => string | undefined;
+}
+
+/**
+ * Prompt for a token, test the connection, and retry on failure.
+ * Returns the validated token, or empty string if skipped.
+ */
+async function collectAndTestToken(
+    prompt: TokenPromptConfig,
+    testFn: (token: string) => Promise<string | null>,
+    platform: string,
+): Promise<string> {
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+        const token = await p.password({
+            message: prompt.message,
+            mask: '*',
+            validate: prompt.validate,
+        });
+        exitIfCancelled(token);
+
+        if (!token) return '';
+
+        const ok = await runConnectionTest(testFn, token, platform);
+        if (ok) return token;
+
+        const action = await p.select({
+            message: `${platform} connection test failed. What would you like to do?`,
+            options: [
+                { value: 'retry', label: 'Re-enter token' },
+                { value: 'skip', label: 'Skip', hint: 'Save current token anyway' },
+            ],
+        });
+        exitIfCancelled(action);
+
+        if (action === 'skip') return token;
+        // action === 'retry' → loop continues
+    }
 }
 
 /* ------------------------------------------------------------------ */
@@ -165,11 +205,7 @@ async function stepDiscord(): Promise<void> {
         'Discord Bot Setup',
     );
 
-    const token = await p.password({
-        message: 'Discord Bot Token',
-        mask: '*',
-    });
-    exitIfCancelled(token);
+    const token = await collectAndTestToken({ message: 'Discord Bot Token' }, testDiscordToken, 'Discord');
 
     if (token) {
         await vault.set('discord-token', token);
@@ -177,7 +213,6 @@ async function stepDiscord(): Promise<void> {
             channels: { discord: { enabled: true, token: `${VAULT_REF_PREFIX}discord-token` } },
         });
         p.log.success('Discord: enabled, token saved to vault.');
-        await runConnectionTest(testDiscordToken, token, 'Discord');
     } else {
         patchConfigFile({ channels: { discord: { enabled: true } } });
         p.log.warn('Discord: enabled without token. Run `geminiclaw setup --step discord` to add it later.');
@@ -361,15 +396,17 @@ async function stepSlack(): Promise<void> {
         'Slack App Setup',
     );
 
-    const token = await p.password({
-        message: 'Slack Bot Token (xoxb-...)',
-        mask: '*',
-        validate: (v) => {
-            if (!v) return undefined;
-            return v.startsWith('xoxb-') ? undefined : 'Token must start with xoxb-';
+    const token = await collectAndTestToken(
+        {
+            message: 'Slack Bot Token (xoxb-...)',
+            validate: (v) => {
+                if (!v) return undefined;
+                return v.startsWith('xoxb-') ? undefined : 'Token must start with xoxb-';
+            },
         },
-    });
-    exitIfCancelled(token);
+        testSlackToken,
+        'Slack',
+    );
 
     const signingSecret = await p.password({
         message: 'Slack Signing Secret',
@@ -392,9 +429,6 @@ async function stepSlack(): Promise<void> {
 
     if (secrets.length > 0) {
         p.log.success(`Slack: enabled, ${secrets.length} secret(s) saved to vault.`);
-        if (token) {
-            await runConnectionTest(testSlackToken, token, 'Slack');
-        }
     } else {
         p.log.warn('Slack: enabled without credentials. Run `geminiclaw setup --step slack` to add them later.');
     }
@@ -422,11 +456,7 @@ async function stepTelegram(): Promise<void> {
         'Telegram Bot Setup',
     );
 
-    const token = await p.password({
-        message: 'Telegram Bot Token',
-        mask: '*',
-    });
-    exitIfCancelled(token);
+    const token = await collectAndTestToken({ message: 'Telegram Bot Token' }, testTelegramToken, 'Telegram');
 
     if (token) {
         await vault.set('telegram-bot-token', token);
@@ -434,7 +464,6 @@ async function stepTelegram(): Promise<void> {
             channels: { telegram: { enabled: true, botToken: `${VAULT_REF_PREFIX}telegram-bot-token` } },
         });
         p.log.success('Telegram: enabled, token saved to vault.');
-        await runConnectionTest(testTelegramToken, token, 'Telegram');
     } else {
         patchConfigFile({ channels: { telegram: { enabled: true } } });
         p.log.warn('Telegram: enabled without token. Run `geminiclaw setup --step telegram` to add it later.');
