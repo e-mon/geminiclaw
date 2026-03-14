@@ -157,6 +157,16 @@ export async function scheduleAllJobs(): Promise<number> {
 
     if (enabledJobs.length === 0) return 0;
 
+    // Cancel all existing sleeping runs first to prevent duplicate executions.
+    // Without this, startup recovery events queue behind already-sleeping runs,
+    // and reschedule events from those runs create a cascade of duplicates.
+    const cancelEvents = enabledJobs.map((j) => ({
+        name: 'cron/job.cancelled' as const,
+        data: { jobId: j.id, nextRunAt: '' },
+    }));
+    await inngest.send(cancelEvents);
+    log.info('startup-cancel-existing', { cancelled: cancelEvents.length });
+
     const events = enabledJobs.map((j) => ({
         name: 'cron/job.scheduled' as const,
         data: { jobId: j.id, nextRunAt: j.nextRunAt as string },
