@@ -32,8 +32,6 @@ const log = createLogger('chat-progress');
 const EDIT_THROTTLE_MS = 3000;
 /** Typing indicator keepalive interval (ms). Discord typing lasts ~10s, we refresh at 8s. */
 const TYPING_KEEPALIVE_MS = 8000;
-/** Max chars for preview direct finalization (Discord's message limit). */
-const PREVIEW_FINALIZE_MAX_CHARS = 2000;
 
 /**
  * Create the appropriate renderer for the given adapter name.
@@ -160,24 +158,10 @@ export class ChatProgressReporter implements ProgressReporter {
 
         if (!this.sent) return;
 
-        // Preview direct finalization: edit progress message into the final reply
-        // if the text is short enough (avoids delete+repost flicker).
-        if (effectiveFinalText && effectiveFinalText.length <= PREVIEW_FINALIZE_MAX_CHARS) {
-            try {
-                await this.thread.adapter.editMessage(this.thread.id, this.sent.id, effectiveFinalText);
-                this.finalized = true;
-                this.clearProgressId();
-                log.info('progress message finalized into reply', {
-                    messageId: this.sent.id,
-                    chars: effectiveFinalText.length,
-                });
-                return;
-            } catch (err) {
-                log.warn('failed to finalize progress message, falling back to delete', { error: String(err) });
-            }
-        }
-
-        // Default: delete the progress message so the caller can post the reply
+        // Always delete the progress message so the caller posts the reply as a new message.
+        // Discord does not send push notifications for message edits, so editing the progress
+        // message into the final reply would leave users unnotified for long-running tasks.
+        // See: https://github.com/e-mon/geminiclaw/issues/6
         try {
             await this.thread.adapter.deleteMessage(this.thread.id, this.sent.id);
             log.info('progress message deleted', { messageId: this.sent.id });
