@@ -98,6 +98,16 @@ export function ensureGeminiSettings(workspacePath: string): void {
     }
     existing.thinkingLevel = appSettings.thinkingLevel ?? 'high';
 
+    // Docker sandbox: enable network access for OAuth and MCP HTTP servers.
+    // v0.35+ defaults to --internal network which blocks external traffic.
+    if (isDocker) {
+        const tools = (existing.tools ?? {}) as Record<string, unknown>;
+        const sandbox = (tools.sandbox ?? {}) as Record<string, unknown>;
+        sandbox.networkAccess = true;
+        tools.sandbox = sandbox;
+        existing.tools = tools;
+    }
+
     const experimental = (existing.experimental ?? {}) as Record<string, unknown>;
     experimental.enableAgents = true;
     existing.experimental = experimental;
