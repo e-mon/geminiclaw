@@ -18,6 +18,7 @@ import { existsSync } from 'node:fs';
 import { isAbsolute, join, resolve } from 'node:path';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+import { switchActiveModel } from '../agent/acp/runner.js';
 import { SessionStore } from '../agent/session/store.js';
 import type { MediaItem } from '../channels/channel.js';
 import { fetchDiscordChannels, fetchSlackChannels, fetchTelegramChats } from '../channels/list-channels.js';
@@ -224,7 +225,43 @@ const TOOLS = [
         // Default to destructive (most conservative); actual effect is resolved per-invocation by classifyEffect()
         annotations: toAnnotations('destructive'),
     },
+    {
+        name: 'geminiclaw_switch_model',
+        description:
+            'Switch the Gemini model on the current active session without restarting. ' +
+            'Available models: gemini-2.5-pro, gemini-2.5-flash, gemini-2.5-flash-lite, etc.',
+        inputSchema: {
+            type: 'object' as const,
+            properties: {
+                modelId: {
+                    type: 'string' as const,
+                    description: 'Target model ID (e.g., "gemini-2.5-pro", "gemini-2.5-flash")',
+                },
+            },
+            required: ['modelId'] as const,
+        },
+        annotations: toAnnotations('write'),
+    },
 ];
+
+async function handleSwitchModel(
+    args: Record<string, unknown>,
+): Promise<{ content: Array<{ type: 'text'; text: string }>; isError?: boolean }> {
+    const modelId = args?.modelId;
+    if (typeof modelId !== 'string' || !modelId) {
+        return { content: [{ type: 'text', text: 'Error: modelId is required' }], isError: true };
+    }
+    try {
+        const switched = await switchActiveModel(modelId);
+        if (!switched) {
+            return { content: [{ type: 'text', text: 'No active session to switch model on' }], isError: true };
+        }
+        return { content: [{ type: 'text', text: `Switched model to ${modelId} on session ${switched}` }] };
+    } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return { content: [{ type: 'text', text: `Failed to switch model: ${msg}` }], isError: true };
+    }
+}
 
 /**
  * Handle skill install directly (not via CLI subprocess).
@@ -696,6 +733,10 @@ export function createAdminServer(workspace: string): Server {
 
         if (name === 'geminiclaw_post_message') {
             return handlePostMessage(workspace, reqArgs as Record<string, unknown>);
+        }
+
+        if (name === 'geminiclaw_switch_model') {
+            return handleSwitchModel(reqArgs as Record<string, unknown>);
         }
 
         if (name !== 'geminiclaw_admin') {

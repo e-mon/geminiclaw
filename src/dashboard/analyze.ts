@@ -260,7 +260,7 @@ function scanSessions(sessionsDir: string, sinceDate?: string): AggregatedData {
                 const skills: string[] = [];
                 // Extract from activate_skill tool calls (primary mechanism)
                 for (const tc of entry.toolCalls ?? []) {
-                    if (tc.name === 'activate_skill') {
+                    if (tc.name === 'activate_skill' || tc.name?.endsWith('_activate_skill')) {
                         const a = tc.args as Record<string, unknown> | undefined;
                         if (typeof a?.name === 'string') {
                             skills.push(a.name);

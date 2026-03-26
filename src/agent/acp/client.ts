@@ -8,16 +8,7 @@
 
 import { type ChildProcess, spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import {
-    closeSync,
-    existsSync,
-    fstatSync,
-    openSync,
-    readFileSync,
-    readSync,
-    realpathSync,
-    writeFileSync,
-} from 'node:fs';
+import { existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { platform } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
@@ -38,6 +29,7 @@ import type {
     AcpNewSessionParams,
     AcpNewSessionResult,
     AcpPromptParams,
+    AcpPromptPart,
     AcpSessionUpdate,
     JsonRpcError,
     JsonRpcResponse,
@@ -470,17 +462,34 @@ export class AcpClient {
      *
      * Returns when the prompt response arrives (i.e. the model is done).
      */
-    async prompt(sessionId: string, text: string, timeoutMs?: number): Promise<JsonRpcResponse> {
-        const params: AcpPromptParams = {
-            sessionId,
-            prompt: [{ type: 'text', text }],
-        };
-        const ms = timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    async prompt(
+        sessionId: string,
+        text: string,
+        options?: { parts?: AcpPromptPart[]; timeoutMs?: number },
+    ): Promise<JsonRpcResponse> {
+        const promptParts: AcpPromptPart[] = options?.parts
+            ? [{ type: 'text', text }, ...options.parts]
+            : [{ type: 'text', text }];
+        const params: AcpPromptParams = { sessionId, prompt: promptParts };
+        const ms = options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
         this.activePromptId = this.nextId; // peek at the ID that send() will use
         try {
             return await this.send('session/prompt', params, ms);
         } finally {
             this.activePromptId = undefined;
+        }
+    }
+
+    /**
+     * Switch the model on an existing session without respawning.
+     *
+     * Uses the `unstable_setSessionModel` ACP method (v0.35+).
+     * Falls back gracefully if the method is unavailable.
+     */
+    async setSessionModel(sessionId: string, modelId: string): Promise<void> {
+        const resp = await this.send('unstable_setSessionModel', { sessionId, modelId }, 30_000);
+        if (resp.error) {
+            throw new Error(`setSessionModel failed: ${resp.error.message}`);
         }
     }
 
@@ -640,17 +649,11 @@ function buildSeatbeltEnv(_cwd: string, geminiArgs: string[], env: Record<string
  */
 function assertSandboxPatchApplied(): void {
     try {
-        const bundlePath = join(dirname(realpathSync(getGeminiBin())), 'gemini.js');
-        // The readStdin patch is near the end of the 25MB bundle, so read
-        // the last 200KB instead of the first 600KB.
-        const fd = openSync(bundlePath, 'r');
-        const stat = fstatSync(fd);
-        const tailSize = Math.min(200_000, stat.size);
-        const buf = Buffer.alloc(tailSize);
-        readSync(fd, buf, 0, tailSize, stat.size - tailSize);
-        closeSync(fd);
-        const tail = buf.toString('utf-8');
-        if (tail.includes('isTTY && !argv.acp') || tail.includes('isTTY && !argv.experimentalAcp')) return; // patched
+        // getGeminiBin() resolves to dist/index.js via symlink; target is dist/src/gemini.js
+        const distDir = dirname(realpathSync(getGeminiBin()));
+        const targetPath = join(distDir, 'src', 'gemini.js');
+        const content = readFileSync(targetPath, 'utf-8');
+        if (content.includes('isTTY && !argv.acp') || content.includes('isTTY && !argv.experimentalAcp')) return; // patched
     } catch {
         return; // can't verify — proceed optimistically
     }

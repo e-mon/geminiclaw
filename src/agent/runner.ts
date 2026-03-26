@@ -267,7 +267,7 @@ export class RunResultBuilder {
                 this.result.toolCalls.push(toolCall);
 
                 // Detect skill activation from activate_skill tool calls
-                if (event.tool_name === 'activate_skill') {
+                if (event.tool_name === 'activate_skill' || event.tool_name?.endsWith('_activate_skill')) {
                     const skillName = extractSkillNameFromToolArgs(event.parameters);
                     if (skillName) this.result.skillActivations.push(skillName);
                 }

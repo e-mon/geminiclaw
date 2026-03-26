@@ -1,0 +1,64 @@
+diff --git a/dist/src/acp/acpClient.js b/dist/src/acp/acpClient.js
+index fa15e8385fa475141f9041d7905847f6aebc63bc..c2418edb732d822b9cb58af5ba7fc3f087fe308c 100644
+--- a/dist/src/acp/acpClient.js
++++ b/dist/src/acp/acpClient.js
+@@ -225,7 +225,7 @@ export class GeminiAgent {
+         this.sessions.set(sessionId, session);
+         // Stream history back to client
+         // eslint-disable-next-line @typescript-eslint/no-floating-promises
+-        session.streamHistory(sessionData.messages);
++        // [geminiclaw patch] streamHistory() removed — prevents late notification contamination
+         setTimeout(() => {
+             // eslint-disable-next-line @typescript-eslint/no-floating-promises
+             session.sendAvailableCommands();
+@@ -476,7 +476,7 @@ export class Session {
+             // It uses `parts` argument but effectively ignores it in current implementation
+             const handled = await this.handleCommand(commandText, parts);
+             if (handled) {
+-                return { stopReason: 'end_turn' };
++                return { stopReason: 'end_turn', _meta: { usageMetadata: undefined, modelVersion: undefined } };
+             }
+         }
+         let nextMessage = { role: 'user', parts };
+@@ -486,9 +486,10 @@ export class Session {
+                 return { stopReason: CoreToolCallStatus.Cancelled };
+             }
+             const functionCalls = [];
++            let _lastUsageMetadata, _lastModelVersion;
+             try {
+                 const model = resolveModel(this.config.getModel(), (await this.config.getGemini31Launched?.()) ?? false);
+-                const responseStream = await chat.sendMessageStream({ model }, nextMessage?.parts ?? [], promptId, pendingSend.signal, LlmRole.MAIN);
++                const responseStream = await chat.sendMessageStream({ model, isChatModel: true }, nextMessage?.parts ?? [], promptId, pendingSend.signal, LlmRole.MAIN);
+                 nextMessage = null;
+                 for await (const resp of responseStream) {
+                     if (pendingSend.signal.aborted) {
+@@ -518,6 +519,7 @@ export class Session {
+                     if (resp.type === StreamEventType.CHUNK && resp.value.functionCalls) {
+                         functionCalls.push(...resp.value.functionCalls);
+                     }
++                    if (resp.type === StreamEventType.CHUNK) { if (resp.value.usageMetadata) { _lastUsageMetadata = resp.value.usageMetadata; } if (resp.value.modelVersion) { _lastModelVersion = resp.value.modelVersion; } }
+                 }
+                 if (pendingSend.signal.aborted) {
+                     return { stopReason: CoreToolCallStatus.Cancelled };
+@@ -542,7 +544,7 @@ export class Session {
+                 nextMessage = { role: 'user', parts: toolResponseParts };
+             }
+         }
+-        return { stopReason: 'end_turn' };
++        return { stopReason: 'end_turn', _meta: { usageMetadata: _lastUsageMetadata, modelVersion: _lastModelVersion } };
+     }
+     async handleCommand(commandText, 
+     // eslint-disable-next-line @typescript-eslint/no-unused-vars
+diff --git a/dist/src/gemini.js b/dist/src/gemini.js
+index e8092d8c83185dcb1e097ed87a2ab6f789ec6d4a..d3d486a971d8c8f0066c3162316c87a8f0e27dad 100644
+--- a/dist/src/gemini.js
++++ b/dist/src/gemini.js
+@@ -229,7 +229,7 @@ export async function main() {
+                 process.exit(ExitCodes.FATAL_AUTHENTICATION_ERROR);
+             }
+             let stdinData = '';
+-            if (!process.stdin.isTTY) {
++            if (!process.stdin.isTTY && !argv.acp) {
+                 stdinData = await readStdin();
+             }
+             // This function is a copy of the one from sandbox.ts
