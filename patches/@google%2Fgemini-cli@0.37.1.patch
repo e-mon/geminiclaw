@@ -1,0 +1,77 @@
+diff --git a/bundle/gemini.js b/bundle/gemini.js
+index 3b159ccc8c2b9cb75409fc0adf059ccf5c661118..ca78782a7e8ce84efdd6ea322292937171f4e05f 100755
+--- a/bundle/gemini.js
++++ b/bundle/gemini.js
+@@ -12532,7 +12532,7 @@ var GeminiAgent = class _GeminiAgent {
+       this.settings
+     );
+     this.sessions.set(sessionId2, session);
+-    session.streamHistory(sessionData.messages);
++    // [geminiclaw patch] streamHistory() removed — prevents late notification contamination
+     setTimeout(() => {
+       session.sendAvailableCommands();
+     }, 0);
+@@ -12803,6 +12803,8 @@ ${thought.description}`;
+     let totalInputTokens = 0;
+     let totalOutputTokens = 0;
+     const modelUsageMap = /* @__PURE__ */ new Map();
++    // [geminiclaw patch] capture full usageMetadata (incl. thoughts/cached) + modelVersion
++    let _lastUsageMetadata, _lastModelVersion;
+     let nextMessage = { role: "user", parts };
+     while (nextMessage !== null) {
+       if (pendingSend.signal.aborted) {
+@@ -12823,7 +12825,7 @@ ${thought.description}`;
+         const router = this.context.config.getModelRouterService();
+         const { model } = await router.route(routingContext);
+         const responseStream = await chat.sendMessageStream(
+-          { model },
++          { model, isChatModel: true },
+           nextMessage?.parts ?? [],
+           promptId,
+           pendingSend.signal,
+@@ -12843,6 +12845,11 @@ ${thought.description}`;
+             if (resp.value.modelVersion) {
+               turnModelId = resp.value.modelVersion;
+             }
++            // [geminiclaw patch] retain full usageMetadata + modelVersion for _meta
++            _lastUsageMetadata = resp.value.usageMetadata;
++            if (resp.value.modelVersion) {
++              _lastModelVersion = resp.value.modelVersion;
++            }
+           }
+           if (resp.type === StreamEventType.CHUNK && resp.value.candidates && resp.value.candidates.length > 0) {
+             const candidate = resp.value.candidates[0];
+@@ -12906,7 +12913,10 @@ ${thought.description}`;
+                     }
+                   })
+                 )
+-              }
++              },
++              // [geminiclaw patch] preserve full usageMetadata + modelVersion
++              usageMetadata: _lastUsageMetadata,
++              modelVersion: _lastModelVersion
+             }
+           };
+         }
+@@ -12942,7 +12952,10 @@ ${thought.description}`;
+             output_tokens: totalOutputTokens
+           },
+           model_usage: modelUsageArray
+-        }
++        },
++        // [geminiclaw patch] preserve full usageMetadata + modelVersion
++        usageMetadata: _lastUsageMetadata,
++        modelVersion: _lastModelVersion
+       }
+     };
+   }
+@@ -14503,7 +14516,8 @@ async function main() {
+         process.exit(ExitCodes.FATAL_AUTHENTICATION_ERROR);
+       }
+       let stdinData = "";
+-      if (!process.stdin.isTTY) {
++      // [geminiclaw patch] ACP bypass — readStdin would consume JSON-RPC frames
++      if (!process.stdin.isTTY && !argv.acp && !argv.experimentalAcp) {
+         stdinData = await readStdin();
+       }
+       const injectStdinIntoArgs = (args, stdinData2) => {

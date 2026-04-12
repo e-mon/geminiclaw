@@ -10,7 +10,7 @@ import { type ChildProcess, spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { platform } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
 import { loadConfig } from '../../config/io.js';
 import { getGeminiBin } from '../../config/paths.js';
@@ -649,9 +649,8 @@ function buildSeatbeltEnv(_cwd: string, geminiArgs: string[], env: Record<string
  */
 function assertSandboxPatchApplied(): void {
     try {
-        // getGeminiBin() resolves to dist/index.js via symlink; target is dist/src/gemini.js
-        const distDir = dirname(realpathSync(getGeminiBin()));
-        const targetPath = join(distDir, 'src', 'gemini.js');
+        // .bin/gemini symlinks directly to bundle/gemini.js in v0.37+
+        const targetPath = realpathSync(getGeminiBin());
         const content = readFileSync(targetPath, 'utf-8');
         if (content.includes('isTTY && !argv.acp') || content.includes('isTTY && !argv.experimentalAcp')) return; // patched
     } catch {
