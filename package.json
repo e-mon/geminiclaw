@@ -37,7 +37,7 @@
     "@chat-adapter/state-memory": "^4.20.0",
     "@chat-adapter/telegram": "^4.20.0",
     "@clack/prompts": "^1.0.1",
-    "@google/gemini-cli": "0.34.0-nightly.20260307.6c3a90645",
+    "@google/gemini-cli": "0.37.1",
     "@mariozechner/pi-tui": "^0.54.2",
     "@modelcontextprotocol/sdk": "^1",
     "@tobilu/qmd": "^1.1.6",
@@ -79,6 +79,6 @@
   ],
   "patchedDependencies": {
     "@tobilu/qmd@1.1.6": "patches/@tobilu%2Fqmd@1.1.6.patch",
-    "@google/gemini-cli@0.34.0-nightly.20260307.6c3a90645": "patches/@google%2Fgemini-cli@0.34.0-nightly.20260307.6c3a90645.patch"
+    "@google/gemini-cli@0.37.1": "patches/@google%2Fgemini-cli@0.37.1.patch"
   }
 }

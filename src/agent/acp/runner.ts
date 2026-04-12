@@ -19,7 +19,7 @@ import {
 import type { AcpClient, SandboxMode } from './client.js';
 import { AcpEventMapper, extractModelVersion, extractUsageMetadata, synthesizeResultEvent } from './event-mapper.js';
 import { AcpProcessPool } from './process-pool.js';
-import type { AcpMcpServerEntry } from './types.js';
+import type { AcpMcpServerEntry, AcpPromptPart } from './types.js';
 
 const log = createLogger('acp-runner');
 
@@ -42,6 +42,20 @@ export function abortSession(targetLaneSessionId: string): boolean {
     return true;
 }
 
+/**
+ * Switch the model on the first active session.
+ *
+ * Uses `unstable_setSessionModel` — falls back gracefully if unavailable.
+ * Returns the laneSessionId that was switched, or undefined if no active session.
+ */
+export async function switchActiveModel(modelId: string): Promise<string | undefined> {
+    for (const [laneSessionId, { client, sessionId }] of activeRuns) {
+        await client.setSessionModel(sessionId, modelId);
+        return laneSessionId;
+    }
+    return undefined;
+}
+
 export interface SpawnGeminiAcpOptions extends SpawnGeminiOptions {
     /** MCP server configurations to inject via session/new. */
     mcpServers?: AcpMcpServerEntry[];
@@ -55,6 +69,8 @@ export interface SpawnGeminiAcpOptions extends SpawnGeminiOptions {
     poolPriority?: 'normal' | 'background';
     /** Sandbox mode: true (auto-detect), false (disabled), 'seatbelt', or 'docker'. */
     sandbox?: SandboxMode;
+    /** Multimodal prompt parts (images, audio) to send alongside text. */
+    multimodalParts?: AcpPromptPart[];
 }
 
 /**
@@ -138,6 +154,17 @@ export async function spawnGeminiAcp(options: SpawnGeminiAcpOptions): Promise<Ru
             const newResult = await client.newSession(options.cwd, options.mcpServers);
             sessionId = newResult.sessionId;
             resolvedModelId = newResult.models?.currentModelId;
+            if (newResult.models?.availableModels?.length) {
+                log.info('available models', {
+                    models: newResult.models.availableModels.map((m) => m.modelId).join(', '),
+                });
+            }
+            if (newResult.modes?.availableModes?.length) {
+                log.info('available modes', {
+                    modes: newResult.modes.availableModes.map((m) => m.id).join(', '),
+                    current: newResult.modes.currentModeId,
+                });
+            }
         }
         log.info('ACP session ready', { ms: Date.now() - sessionMs });
 
@@ -314,7 +341,10 @@ export async function spawnGeminiAcp(options: SpawnGeminiAcpOptions): Promise<Ru
 
         let resp: Awaited<ReturnType<typeof client.prompt>>;
         try {
-            resp = await client.prompt(sessionId, promptText, options.timeoutMs);
+            resp = await client.prompt(sessionId, promptText, {
+                parts: options.multimodalParts,
+                timeoutMs: options.timeoutMs,
+            });
         } finally {
             clearInterval(askUserPoller);
         }

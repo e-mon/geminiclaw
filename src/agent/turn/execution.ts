@@ -5,11 +5,12 @@
  * and context overflow.
  */
 
-import { existsSync, realpathSync } from 'node:fs';
-import { join, relative, resolve, sep } from 'node:path';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
+import { extname, join, relative, resolve, sep } from 'node:path';
 import { loadConfig } from '../../config.js';
 import { createLogger } from '../../logger.js';
 import { spawnGeminiAcp } from '../acp/runner.js';
+import type { AcpPromptPart } from '../acp/types.js';
 import type { RunResult } from '../runner.js';
 import { generateSessionSummary, SessionStore, silentMemoryFlush } from '../session/index.js';
 import {
@@ -67,7 +68,7 @@ export async function runGemini(
         log.info('model offloaded for this run', { requested: params.model, effective: effectiveModel });
     }
 
-    const fileRefs = buildFileRefs(params);
+    const { fileRefs, parts: multimodalParts } = buildPromptParts(params);
     const promptWithFiles = fileRefs ? `${params.prompt}\n\n${fileRefs}` : params.prompt;
     const fullPrompt = contextPrefix.trim() ? `${contextPrefix}\n\n---\n\n${promptWithFiles}` : promptWithFiles;
 
@@ -88,6 +89,7 @@ export async function runGemini(
         laneSessionId: params.sessionId,
         poolPriority: params.trigger === 'heartbeat' ? 'background' : 'normal',
         sandbox: params.sandbox,
+        multimodalParts: multimodalParts.length > 0 ? multimodalParts : undefined,
     });
 
     result.prompt = params.prompt;
@@ -126,24 +128,64 @@ export async function runGemini(
     return result;
 }
 
-/** Build @ file references for multimodal input, with workspace path validation. */
-function buildFileRefs(params: Pick<RunTurnParams, 'files' | 'workspacePath'>): string {
-    if (!params.files?.length) return '';
+const IMAGE_EXTS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp']);
+const AUDIO_EXTS = new Set(['.wav', '.mp3', '.ogg', '.flac', '.m4a', '.aac']);
 
-    return params.files
-        .map((f) => {
-            const abs = resolve(params.workspacePath, f.path);
-            if (!existsSync(abs)) {
-                throw new Error(`Multimodal input file not found: ${f.path}`);
-            }
-            const realFile = realpathSync(abs);
-            const realBase = realpathSync(params.workspacePath);
-            if (!realFile.startsWith(realBase + sep)) {
-                throw new Error(`File path escapes workspace: ${f.path}`);
-            }
-            return `@${relative(realBase, realFile)}`;
-        })
-        .join('\n');
+const MIME_MAP: Record<string, string> = {
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.gif': 'image/gif',
+    '.webp': 'image/webp',
+    '.bmp': 'image/bmp',
+    '.wav': 'audio/wav',
+    '.mp3': 'audio/mpeg',
+    '.ogg': 'audio/ogg',
+    '.flac': 'audio/flac',
+    '.m4a': 'audio/mp4',
+    '.aac': 'audio/aac',
+};
+
+/**
+ * Build multimodal prompt parts and file references from attached files.
+ *
+ * Images/audio are encoded as inline base64 AcpPromptParts for direct
+ * multimodal processing. Other files use `@filepath` text references
+ * for Gemini CLI's native file handling.
+ */
+function buildPromptParts(params: Pick<RunTurnParams, 'files' | 'workspacePath'>): {
+    fileRefs: string;
+    parts: AcpPromptPart[];
+} {
+    if (!params.files?.length) return { fileRefs: '', parts: [] };
+
+    const refs: string[] = [];
+    const parts: AcpPromptPart[] = [];
+    const realBase = realpathSync(params.workspacePath);
+
+    for (const f of params.files) {
+        const abs = resolve(params.workspacePath, f.path);
+        if (!existsSync(abs)) {
+            throw new Error(`Multimodal input file not found: ${f.path}`);
+        }
+        const realFile = realpathSync(abs);
+        if (!realFile.startsWith(realBase + sep)) {
+            throw new Error(`File path escapes workspace: ${f.path}`);
+        }
+
+        const ext = extname(f.path).toLowerCase();
+        if (IMAGE_EXTS.has(ext)) {
+            const data = readFileSync(realFile).toString('base64');
+            parts.push({ type: 'image', mimeType: MIME_MAP[ext] ?? 'application/octet-stream', data });
+        } else if (AUDIO_EXTS.has(ext)) {
+            const data = readFileSync(realFile).toString('base64');
+            parts.push({ type: 'audio', mimeType: MIME_MAP[ext] ?? 'application/octet-stream', data });
+        } else {
+            refs.push(`@${relative(realBase, realFile)}`);
+        }
+    }
+
+    return { fileRefs: refs.join('\n'), parts };
 }
 
 /**

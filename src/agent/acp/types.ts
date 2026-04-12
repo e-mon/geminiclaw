@@ -114,9 +114,28 @@ export interface AcpNewSessionParams {
     mcpServers?: AcpMcpServerEntry[];
 }
 
+export interface AcpAvailableModel {
+    modelId: string;
+    name: string;
+    description?: string;
+}
+
+export interface AcpAvailableMode {
+    id: string;
+    name: string;
+    description?: string;
+}
+
 export interface AcpNewSessionResult {
     sessionId: string;
-    models?: { currentModelId?: string };
+    models?: {
+        currentModelId?: string;
+        availableModels?: AcpAvailableModel[];
+    };
+    modes?: {
+        currentModeId?: string;
+        availableModes?: AcpAvailableMode[];
+    };
 }
 
 export interface AcpLoadSessionParams {
@@ -125,9 +144,15 @@ export interface AcpLoadSessionParams {
     mcpServers?: AcpMcpServerEntry[];
 }
 
+/** A single part of an ACP prompt (text, image, or audio). */
+export type AcpPromptPart =
+    | { type: 'text'; text: string }
+    | { type: 'image'; mimeType: string; data: string }
+    | { type: 'audio'; mimeType: string; data: string };
+
 export interface AcpPromptParams {
     sessionId: string;
-    prompt: Array<{ type: 'text'; text: string }>;
+    prompt: AcpPromptPart[];
 }
 
 export interface AcpPromptResult {
